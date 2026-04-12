@@ -191,9 +191,26 @@ class SoundEngine {
     this.metal.triggerAttackRelease('8n');
   }
 
+  // ── Round progression ─────────────────────────────────────────────────────
+
+  /**
+   * Plays between rounds — a shorter, brighter sting than the final victory
+   * fanfare. Uses a quick two-octave jump to signal "keep going!".
+   */
+  roundClear() {
+    if (!this._ready()) return;
+    this.fm.modulationIndex.value = 8;
+    const now = Tone.now() + 0.05;
+    ['G4', 'B4', 'D5'].forEach((note, i) => {
+      this.fm.triggerAttackRelease(note, '16n', now + i * 0.09);
+    });
+    // Accent note
+    this.mem.triggerAttackRelease('G3', '8n', now + 0.3);
+  }
+
   // ── End screens ───────────────────────────────────────────────────────────
 
-  /** Ascending FM arpeggio on victory. */
+  /** Ascending FM arpeggio on final victory. */
   victory() {
     if (!this._ready()) return;
     this.fm.modulationIndex.value = 10;

@@ -1,17 +1,41 @@
 const STATES = {
-  PLAYER_CHOICE:  'PLAYER_CHOICE',
-  GESTURE_ATTACK: 'GESTURE_ATTACK',
-  GESTURE_MAGIC:  'GESTURE_MAGIC',
-  RESOLVE_PLAYER: 'RESOLVE_PLAYER',
-  ENEMY_ATTACK:   'ENEMY_ATTACK',
-  RESOLVE_ENEMY:  'RESOLVE_ENEMY',
-  VICTORY:        'VICTORY',
-  DEFEAT:         'DEFEAT',
+  PLAYER_CHOICE:   'PLAYER_CHOICE',
+  GESTURE_ATTACK:  'GESTURE_ATTACK',
+  GESTURE_MAGIC:   'GESTURE_MAGIC',
+  RESOLVE_PLAYER:  'RESOLVE_PLAYER',
+  ENEMY_ATTACK:    'ENEMY_ATTACK',
+  RESOLVE_ENEMY:   'RESOLVE_ENEMY',
+  ENCOUNTER_CLEAR: 'ENCOUNTER_CLEAR',
+  VICTORY:         'VICTORY',
+  DEFEAT:          'DEFEAT',
 };
 
 const ALL_DIRECTIONS = ['up', 'down', 'left', 'right'];
 const MAGIC_COST     = 15;
 const MAGIC_DURATION = 2200; // ms for full charge
+
+/**
+ * Encounter configs drive both enemy creation and per-round timing difficulty.
+ * arrowCount:   number of swipe arrows in an attack combo
+ * arrowTimeout: frames the player has per arrow  (90 = ~1.5s, 62 = ~1.0s)
+ * tapTimeout:   frames before a block circle vanishes (78 = ~1.3s, 52 = ~0.87s)
+ */
+const ENCOUNTERS = [
+  {
+    label:        'Round 1',
+    createEnemy:  () => new Enemy('Void Wraith', 120, 15, [2, 3], 'wraith'),
+    arrowCount:   3,
+    arrowTimeout: 90,
+    tapTimeout:   78,
+  },
+  {
+    label:        'Round 2',
+    createEnemy:  () => new Enemy('Arc Phantom', 160, 22, [3, 4], 'phantom'),
+    arrowCount:   4,     // one more arrow to swipe
+    arrowTimeout: 62,    // ~1.0s per arrow
+    tapTimeout:   52,    // ~0.87s to tap each circle
+  },
+];
 
 class Game {
   constructor(p) {
@@ -21,8 +45,10 @@ class Game {
   }
 
   _init() {
-    this.player  = new Player('Hero', 100, 50, 20, 10, 30);
-    this.enemy   = new Enemy('Void Wraith', 120, 15, [2, 3]);
+    this.encounterIdx    = 0;
+    this.encounterConfig = ENCOUNTERS[0];
+    this.player   = new Player('Hero', 100, 50, 20, 10, 30);
+    this.enemy    = this.encounterConfig.createEnemy();
     this.gestures = new GestureRecognizer();
     this.ui       = new UI(this.p);
 
@@ -49,11 +75,12 @@ class Game {
     if (this.playerFlashTimer > 0) this.playerFlashTimer--;
 
     switch (this.state) {
-      case STATES.GESTURE_ATTACK: this._updateGestureAttack(); break;
-      case STATES.GESTURE_MAGIC:  this._updateGestureMagic();  break;
-      case STATES.RESOLVE_PLAYER: this._updateResolvePlayer(); break;
-      case STATES.ENEMY_ATTACK:   this._updateEnemyAttack();   break;
-      case STATES.RESOLVE_ENEMY:  this._updateResolveEnemy();  break;
+      case STATES.GESTURE_ATTACK:  this._updateGestureAttack();  break;
+      case STATES.GESTURE_MAGIC:   this._updateGestureMagic();   break;
+      case STATES.RESOLVE_PLAYER:  this._updateResolvePlayer();  break;
+      case STATES.ENEMY_ATTACK:    this._updateEnemyAttack();    break;
+      case STATES.RESOLVE_ENEMY:   this._updateResolveEnemy();   break;
+      case STATES.ENCOUNTER_CLEAR: this._updateEncounterClear(); break;
     }
   }
 
@@ -65,9 +92,10 @@ class Game {
       case STATES.GESTURE_MAGIC:  this._drawGestureMagic();  break;
       case STATES.RESOLVE_PLAYER: this._drawBaseBattle();    break;
       case STATES.ENEMY_ATTACK:   this._drawEnemyAttack();   break;
-      case STATES.RESOLVE_ENEMY:  this._drawBaseBattle();    break;
-      case STATES.VICTORY:        this._drawBaseBattle(); this.ui.drawVictoryScreen(); break;
-      case STATES.DEFEAT:         this._drawBaseBattle(); this.ui.drawDefeatScreen();  break;
+      case STATES.RESOLVE_ENEMY:   this._drawBaseBattle();    break;
+      case STATES.ENCOUNTER_CLEAR: this._drawEncounterClear(); break;
+      case STATES.VICTORY:         this._drawBaseBattle(); this.ui.drawVictoryScreen(); break;
+      case STATES.DEFEAT:          this._drawBaseBattle(); this.ui.drawDefeatScreen();  break;
     }
   }
 
@@ -110,10 +138,11 @@ class Game {
       case STATES.GESTURE_ATTACK: this._setupGestureAttack(); break;
       case STATES.GESTURE_MAGIC:  this._setupGestureMagic();  break;
       case STATES.RESOLVE_PLAYER: this._setupResolvePlayer(); break;
-      case STATES.ENEMY_ATTACK:   this._setupEnemyAttack();   break;
-      case STATES.RESOLVE_ENEMY:  this._setupResolveEnemy();  break;
-      case STATES.VICTORY:        this.sound.victory();       break;
-      case STATES.DEFEAT:         this.sound.defeat();        break;
+      case STATES.ENEMY_ATTACK:    this._setupEnemyAttack();    break;
+      case STATES.RESOLVE_ENEMY:   this._setupResolveEnemy();   break;
+      case STATES.ENCOUNTER_CLEAR: this._setupEncounterClear(); break;
+      case STATES.VICTORY:         this.sound.victory();        break;
+      case STATES.DEFEAT:          this.sound.defeat();         break;
     }
   }
 
@@ -158,14 +187,14 @@ class Game {
   // GESTURE_ATTACK — swipe 3 directional arrows in sequence
   // ══════════════════════════════════════════════════════════════════════════
   _setupGestureAttack() {
-    const total = 3;
+    const { arrowCount: total, arrowTimeout } = this.encounterConfig;
     this.gesturePhase = {
       sequence:    this._randomDirections(total),
       total,
       currentIdx:  0,
       hits:        0,
-      arrowTimer:  90,   // frames per arrow (~1.5s at 60fps)
-      arrowTimeout: 90,
+      arrowTimer:   arrowTimeout,
+      arrowTimeout,
       showResult:  false,
       resultIsHit: false,
       resultTimer: 0,
@@ -360,7 +389,7 @@ class Game {
       currentStrike: 0,
       targets:       [],       // active tap circles
       unblockedHits: 0,
-      tapTimeout:    78,       // frames before circle vanishes (≈1.3s)
+      tapTimeout:    this.encounterConfig.tapTimeout,
       strikeDelay:   48,       // frames between strikes
       strikeDelayTimer: 0,
       allDone:       false,
@@ -516,10 +545,46 @@ class Game {
 
   _updateResolveEnemy() {
     if (--this.resolvePhase.timer <= 0) {
-      if (!this.player.isAlive())  this._enterState(STATES.DEFEAT);
-      else if (!this.enemy.isAlive()) this._enterState(STATES.VICTORY);
-      else                          this._enterState(STATES.PLAYER_CHOICE);
+      if (!this.player.isAlive()) {
+        this._enterState(STATES.DEFEAT);
+      } else if (!this.enemy.isAlive()) {
+        const hasNext = this.encounterIdx < ENCOUNTERS.length - 1;
+        this._enterState(hasNext ? STATES.ENCOUNTER_CLEAR : STATES.VICTORY);
+      } else {
+        this._enterState(STATES.PLAYER_CHOICE);
+      }
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ENCOUNTER_CLEAR — celebrate round win, then start next encounter
+  // ══════════════════════════════════════════════════════════════════════════
+  _setupEncounterClear() {
+    this.resolvePhase = { timer: 200 }; // ~3.3s
+    this.sound.roundClear();
+  }
+
+  _updateEncounterClear() {
+    if (--this.resolvePhase.timer <= 0) {
+      // Advance to next encounter
+      this.encounterIdx++;
+      this.encounterConfig = ENCOUNTERS[this.encounterIdx];
+      this.enemy = this.encounterConfig.createEnemy();
+      // Partial heal between rounds
+      this.player.heal(25);
+      this.player.restoreMP(20);
+      this._enterState(STATES.PLAYER_CHOICE);
+    }
+  }
+
+  _drawEncounterClear() {
+    this._drawBaseBattle();
+    const nextEnc = ENCOUNTERS[this.encounterIdx + 1];
+    this.ui.drawEncounterClearScreen(
+      this.encounterConfig.label,
+      nextEnc ? nextEnc.createEnemy().name : null,
+      this.resolvePhase.timer
+    );
   }
 
   // ── Shared render helpers ─────────────────────────────────────────────────

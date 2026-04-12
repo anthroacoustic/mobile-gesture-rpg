@@ -458,6 +458,52 @@ class UI {
   }
 
   // ── End screens ───────────────────────────────────────────────────────────
+  /**
+   * @param {string}      roundLabel  e.g. "Round 1"
+   * @param {string|null} nextName    name of next enemy, or null if final
+   * @param {number}      timer       remaining frames (used for progress bar)
+   */
+  drawEncounterClearScreen(roundLabel, nextName, timer) {
+    const p         = this.p;
+    const totalTime = 200;
+    const progress  = 1 - timer / totalTime; // 0..1
+
+    // Overlay
+    p.fill(0, 0, 0, 175);
+    p.noStroke();
+    p.rect(0, 0, this.w, this.h);
+
+    // Round clear heading
+    p.fill(...this.C.blue, 255);
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(44);
+    p.textStyle(p.BOLD);
+    p.text(`${roundLabel} CLEAR!`, this.w / 2, this.h / 2 - 50);
+    p.textStyle(p.NORMAL);
+
+    // HP restored note
+    p.fill(...this.C.pink, 200);
+    p.textSize(15);
+    p.text('+25 HP  +20 MP restored', this.w / 2, this.h / 2 + 4);
+
+    // Next enemy preview
+    if (nextName) {
+      p.fill(...this.C.textLight, 190);
+      p.textSize(15);
+      p.text(`Next: ${nextName}`, this.w / 2, this.h / 2 + 40);
+    }
+
+    // Auto-advance progress bar
+    const barW = this.w * 0.55;
+    const barH = 5;
+    const bx   = (this.w - barW) / 2;
+    const by   = this.h / 2 + 72;
+    p.fill(40, 50, 70, 200);
+    this._roundRect(bx, by, barW, barH, 3);
+    p.fill(...this.C.blue, 200);
+    this._roundRect(bx, by, barW * progress, barH, 3);
+  }
+
   drawVictoryScreen() {
     const p = this.p;
     p.fill(0, 0, 0, 185);
