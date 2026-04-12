@@ -44,10 +44,10 @@ class UI {
     p.line(0, this.dividerY, this.w, this.dividerY);
     p.noStroke();
     // Version stamp
-    p.fill(...this.C.textLight, 55);
+    p.fill(...this.C.textLight, 180);
     p.textAlign(p.RIGHT, p.BOTTOM);
-    p.textSize(11);
-    p.text('v0.2', this.w - 8, this.h - 6);
+    p.textSize(13);
+    p.text('v0.2', this.w - 10, this.h - 10);
   }
 
   drawEnemyArea(enemy) {
