@@ -45,9 +45,9 @@ class UI {
     p.noStroke();
     // Version stamp
     p.fill(...this.C.textLight, 180);
-    p.textAlign(p.RIGHT, p.BOTTOM);
+    p.textAlign(p.RIGHT, p.TOP);
     p.textSize(13);
-    p.text('v0.2', this.w - 10, this.h - 10);
+    p.text('v0.2', this.w - 10, 8);
   }
 
   drawEnemyArea(enemy) {
