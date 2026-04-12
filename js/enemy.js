@@ -129,7 +129,7 @@ class Enemy {
     for (let i = 3; i >= 1; i--) {
       const r     = radius + i * 20 + Math.sin(this.auraPhase + i * 1.1) * 7;
       const alpha = 22 - i * 5;
-      p.fill(247, 168, 192, alpha);
+      p.fill(190, 120, 255, alpha);
       p.ellipse(cx, cy, r * 2, r * 1.85);
     }
   }
@@ -149,7 +149,7 @@ class Enemy {
       const c2y = startY + Math.sin(angle - 0.28) * len * 0.75;
       const ex  = startX + Math.cos(angle - 0.08) * len;
       const ey  = startY + Math.sin(angle + 0.42) * len;
-      p.stroke(244, 104, 138, 170 - i * 18);
+      p.stroke(160, 60, 220, 170 - i * 18);
       p.beginShape();
       p.vertex(startX, startY);
       p.bezierVertex(c1x, c1y, c2x, c2y, ex, ey);
@@ -159,8 +159,8 @@ class Enemy {
   }
 
   _drawWraithBody(p, cx, cy, radius) {
-    p.fill(247, 168, 192, 225);
-    p.stroke(244, 104, 138, 190);
+    p.fill(190, 120, 255, 225);
+    p.stroke(160, 60, 220, 190);
     p.strokeWeight(2);
     this._hexPath(p, cx, cy, radius);
     p.endShape(p.CLOSE);
