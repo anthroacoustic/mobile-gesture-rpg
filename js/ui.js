@@ -504,7 +504,7 @@ class UI {
     this._roundRect(bx, by, barW * progress, barH, 3);
   }
 
-  drawVictoryScreen() {
+  drawVictoryScreen(enemyName) {
     const p = this.p;
     p.fill(0, 0, 0, 185);
     p.noStroke();
@@ -519,14 +519,14 @@ class UI {
 
     p.fill(...this.C.blueLight, 200);
     p.textSize(18);
-    p.text('Void Wraith defeated!', this.w / 2, this.h / 2 + 22);
+    p.text(`${enemyName} defeated!`, this.w / 2, this.h / 2 + 22);
 
     p.fill(...this.C.textLight, 150);
     p.textSize(14);
     p.text('Tap to play again', this.w / 2, this.h / 2 + 65);
   }
 
-  drawDefeatScreen() {
+  drawDefeatScreen(enemyName) {
     const p = this.p;
     p.fill(0, 0, 0, 200);
     p.noStroke();
@@ -541,7 +541,7 @@ class UI {
 
     p.fill(...this.C.blue, 180);
     p.textSize(18);
-    p.text('The Void Wraith prevails\u2026', this.w / 2, this.h / 2 + 22);
+    p.text(`The ${enemyName} prevails\u2026`, this.w / 2, this.h / 2 + 22);
 
     p.fill(...this.C.textLight, 150);
     p.textSize(14);

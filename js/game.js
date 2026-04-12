@@ -96,8 +96,8 @@ class Game {
       case STATES.ENEMY_ATTACK:   this._drawEnemyAttack();   break;
       case STATES.RESOLVE_ENEMY:   this._drawBaseBattle();    break;
       case STATES.ENCOUNTER_CLEAR: this._drawEncounterClear(); break;
-      case STATES.VICTORY:         this._drawBaseBattle(); this.ui.drawVictoryScreen(); break;
-      case STATES.DEFEAT:          this._drawBaseBattle(); this.ui.drawDefeatScreen();  break;
+      case STATES.VICTORY:         this._drawBaseBattle(); this.ui.drawVictoryScreen(this.enemy.name); break;
+      case STATES.DEFEAT:          this._drawBaseBattle(); this.ui.drawDefeatScreen(this.enemy.name);  break;
     }
   }
 
