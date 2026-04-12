@@ -16,6 +16,7 @@ const MAGIC_DURATION = 2200; // ms for full charge
 class Game {
   constructor(p) {
     this.p = p;
+    this.sound = new SoundEngine(); // Created once; survives _init() restarts
     this._init();
   }
 
@@ -77,8 +78,9 @@ class Game {
 
     // Magic charging begins on touch-down
     if (this.state === STATES.GESTURE_MAGIC && !this.gesturePhase.charging) {
-      this.gesturePhase.charging   = true;
+      this.gesturePhase.charging    = true;
       this.gesturePhase.chargeStart = this.p.millis();
+      this.sound.magicChargeStart();
     }
   }
 
@@ -110,6 +112,8 @@ class Game {
       case STATES.RESOLVE_PLAYER: this._setupResolvePlayer(); break;
       case STATES.ENEMY_ATTACK:   this._setupEnemyAttack();   break;
       case STATES.RESOLVE_ENEMY:  this._setupResolveEnemy();  break;
+      case STATES.VICTORY:        this.sound.victory();       break;
+      case STATES.DEFEAT:         this.sound.defeat();        break;
     }
   }
 
@@ -130,9 +134,11 @@ class Game {
 
   _handleChoiceGesture(gesture) {
     if (gesture.type !== 'tap') return;
+    this.sound.unlock(); // No-op if already unlocked; resumes AudioContext on first gesture
     const rects = this.ui.getButtonRects();
     for (const btn of rects) {
       if (this._hitTest(gesture.x, gesture.y, btn)) {
+        this.sound.uiTap();
         if (btn.action === 'attack') {
           this._enterState(STATES.GESTURE_ATTACK);
         } else if (btn.action === 'magic') {
@@ -220,11 +226,16 @@ class Game {
     const gp = this.gesturePhase;
     if (gp.done || gp.showResult || gesture.type !== 'swipe') return;
 
-    const correct   = gesture.direction === gp.sequence[gp.currentIdx];
-    if (correct) gp.hits++;
-    gp.showResult   = true;
-    gp.resultIsHit  = correct;
-    gp.resultTimer  = 22;
+    const correct = gesture.direction === gp.sequence[gp.currentIdx];
+    if (correct) {
+      gp.hits++;
+      this.sound.swipeHit();
+    } else {
+      this.sound.swipeMiss();
+    }
+    gp.showResult  = true;
+    gp.resultIsHit = correct;
+    gp.resultTimer = 22;
   }
 
   _resolveAttack() {
@@ -238,6 +249,7 @@ class Game {
       dmg,
       [126, 207, 238]
     );
+    this.sound.comboComplete(gp.hits, gp.total);
     this._enterState(STATES.RESOLVE_PLAYER);
   }
 
@@ -262,6 +274,7 @@ class Game {
 
     if (gp.charging && !gp.released) {
       gp.chargeRatio = Math.min(1.0, (this.p.millis() - gp.chargeStart) / MAGIC_DURATION);
+      this.sound.magicChargeUpdate(gp.chargeRatio);
       if (gp.chargeRatio >= 1.0) {
         // Auto-release at max charge
         gp.released    = true;
@@ -315,6 +328,7 @@ class Game {
       dmg,
       [247, 168, 192]
     );
+    this.sound.magicCast(power);
     this._enterState(STATES.RESOLVE_PLAYER);
   }
 
@@ -363,6 +377,11 @@ class Game {
       ep.windUpTimer--;
       const progress = 1 - ep.windUpTimer / 90;
       this.enemy.setWindUp(1.0 + progress * 0.28);
+      // Metallic pulses that get more frequent as the wind-up builds
+      const interval = Math.max(8, Math.round(28 - progress * 20));
+      if (ep.windUpTimer % interval === 0) {
+        this.sound.windUpPulse(progress);
+      }
       if (ep.windUpTimer <= 0) {
         ep.windUpDone = true;
         this.enemy.setWindUp(1.0);
@@ -464,6 +483,7 @@ class Game {
       const dy = gesture.y - t.y;
       if (Math.sqrt(dx * dx + dy * dy) <= t.maxRadius) {
         ep.targets.splice(i, 1);
+        this.sound.block();
         this._advanceStrike();
         break;
       }
@@ -481,6 +501,7 @@ class Game {
       const actual = this.player.takeDamage(this.enemy.atk * hits);
       if (actual > 0) {
         this.playerFlashTimer = 22;
+        this.sound.playerHit();
         this.ui.spawnDamageNumber(
           this.damageNumbers,
           this.ui.w / 2 + (Math.random() - 0.5) * 60,
