@@ -43,6 +43,11 @@ class UI {
     p.strokeWeight(1);
     p.line(0, this.dividerY, this.w, this.dividerY);
     p.noStroke();
+    // Version stamp
+    p.fill(...this.C.textLight, 55);
+    p.textAlign(p.RIGHT, p.BOTTOM);
+    p.textSize(11);
+    p.text('v0.2', this.w - 8, this.h - 6);
   }
 
   drawEnemyArea(enemy) {
