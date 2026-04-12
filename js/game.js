@@ -23,6 +23,7 @@ const MAGIC_DURATION = 2200; // ms for full charge
 const ENCOUNTERS = [
   {
     label:        'Round 1',
+    enemyName:    'Void Wraith',
     createEnemy:  () => new Enemy('Void Wraith', 120, 15, [2, 3], 'wraith'),
     arrowCount:   3,
     arrowTimeout: 90,
@@ -30,6 +31,7 @@ const ENCOUNTERS = [
   },
   {
     label:        'Round 2',
+    enemyName:    'Arc Phantom',
     createEnemy:  () => new Enemy('Arc Phantom', 160, 22, [3, 4], 'phantom'),
     arrowCount:   4,     // one more arrow to swipe
     arrowTimeout: 62,    // ~1.0s per arrow
@@ -371,7 +373,8 @@ class Game {
   _updateResolvePlayer() {
     if (--this.resolvePhase.timer <= 0) {
       if (!this.enemy.isAlive()) {
-        this._enterState(STATES.VICTORY);
+        const hasNext = this.encounterIdx < ENCOUNTERS.length - 1;
+        this._enterState(hasNext ? STATES.ENCOUNTER_CLEAR : STATES.VICTORY);
       } else {
         this._enterState(STATES.ENEMY_ATTACK);
       }
@@ -582,7 +585,7 @@ class Game {
     const nextEnc = ENCOUNTERS[this.encounterIdx + 1];
     this.ui.drawEncounterClearScreen(
       this.encounterConfig.label,
-      nextEnc ? nextEnc.createEnemy().name : null,
+      nextEnc ? nextEnc.enemyName : null,
       this.resolvePhase.timer
     );
   }
