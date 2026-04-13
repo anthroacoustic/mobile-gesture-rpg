@@ -28,8 +28,8 @@ const ENCOUNTERS = [
     arrowCount:   3,
     arrowTimeout: 90,
     tapTimeout:   78,
-    bubbleSpeed:  3.0,
-    bubbleAccel:  0.055,
+    bubbleSpeed:  2.2,
+    bubbleAccel:  0.04,
   },
   {
     label:        'Round 2',
@@ -38,8 +38,8 @@ const ENCOUNTERS = [
     arrowCount:   4,
     arrowTimeout: 62,
     tapTimeout:   52,
-    bubbleSpeed:  5.0,
-    bubbleAccel:  0.095,
+    bubbleSpeed:  3.8,
+    bubbleAccel:  0.07,
   },
 ];
 
