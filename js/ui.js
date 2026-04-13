@@ -30,7 +30,7 @@ class UI {
   get playerNameY()   { return this.h * 0.74; }
   get hpBarY()        { return this.h * 0.775; }
   get mpBarY()        { return this.h * 0.815; }
-  get messageY()      { return this.h * 0.535; }
+  get messageY()      { return this.h * 0.55; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {

@@ -187,7 +187,7 @@ class Game {
         this.player.mp >= MAGIC_COST
       );
     } else {
-      this.ui.drawStatusMessage('Your turn  —  press to open menu', this.ui.C.textLight);
+      this.ui.drawStatusMessage('YOUR TURN  —  PRESS TO OPEN MENU', this.ui.C.textLight);
     }
   }
 
