@@ -235,11 +235,14 @@ class Game {
       resultIsHit: false,
       resultTimer: 0,
       done:        false,
+      lastSwipeDir: null,
+      swipeTimer:   0,
     };
   }
 
   _updateGestureAttack() {
     const gp = this.gesturePhase;
+    if (gp.swipeTimer > 0) gp.swipeTimer--;
     if (gp.done) return;
 
     if (gp.showResult) {
@@ -284,7 +287,7 @@ class Game {
       this.ui.drawHitMissFlash(gp.resultIsHit, Math.round((gp.resultTimer / 22) * 220));
     }
 
-    this.ui.drawPlayerAvatar(this.player, 0, 'attack');
+    this.ui.drawPlayerAvatar(this.player, 0, 'attack', gp.swipeTimer / 18, gp.lastSwipeDir);
     this.ui.drawDamageNumbers(this.damageNumbers);
   }
 
@@ -293,9 +296,21 @@ class Game {
     if (gp.done || gp.showResult || gesture.type !== 'swipe') return;
 
     const correct = gesture.direction === gp.sequence[gp.currentIdx];
+    gp.lastSwipeDir = gesture.direction;
+    gp.swipeTimer   = 18;
     if (correct) {
       gp.hits++;
       this.sound.swipeHit();
+      // Immediate per-swipe damage
+      const swipeDmg = Math.round(this.player.atk / gp.total);
+      this.enemy.takeDamage(swipeDmg);
+      this.ui.spawnDamageNumber(
+        this.damageNumbers,
+        this.ui.enemyCenterX + (Math.random() - 0.5) * 44,
+        this.ui.enemyCenterY - 72,
+        swipeDmg,
+        [126, 207, 238]
+      );
     } else {
       this.sound.swipeMiss();
     }
@@ -305,16 +320,8 @@ class Game {
   }
 
   _resolveAttack() {
-    const gp  = this.gesturePhase;
-    const dmg = Math.round(this.player.atk * (0.5 + 0.5 * (gp.hits / gp.total)));
-    this.enemy.takeDamage(dmg);
-    this.ui.spawnDamageNumber(
-      this.damageNumbers,
-      this.ui.enemyCenterX + (Math.random() - 0.5) * 44,
-      this.ui.enemyCenterY - 72,
-      dmg,
-      [126, 207, 238]
-    );
+    const gp = this.gesturePhase;
+    // Damage was already applied per-swipe; just play combo sound and transition
     this.sound.comboComplete(gp.hits, gp.total);
     this._enterState(STATES.RESOLVE_PLAYER);
   }
@@ -426,7 +433,8 @@ class Game {
       windUpDone:    false,
       totalStrikes:  this.enemy.getStrikeCount(),
       currentStrike: 0,
-      targets:       [],       // active tap circles
+      targets:       [],       // active bubbles
+      pops:          [],       // pop burst animations
       unblockedHits: 0,
       tapTimeout:    this.encounterConfig.tapTimeout,
       strikeDelay:   48,       // frames between strikes
@@ -458,18 +466,35 @@ class Game {
       return;
     }
 
-    // Move bubbles toward hero; check for collision
+    // Move bubbles with oscillating (spiral) path; check for hero collision
     const heroR = 42;
     for (let i = ep.targets.length - 1; i >= 0; i--) {
-      const t = ep.targets[i];
-      t.x += t.vx * t.speed;
-      t.y += t.vy * t.speed;
+      const t   = ep.targets[i];
+      const dhx = this.ui.enemyCenterX - t.x;
+      const dhy = this.ui.heroCenterY  - t.y;
+      const dd  = Math.hypot(dhx, dhy) || 1;
+
+      // Perpendicular direction (90° CCW of toward-hero)
+      const pvx = -dhy / dd;
+      const pvy =  dhx / dd;
+
+      t.spiralPhase += 0.12;
+      const perp = Math.sin(t.spiralPhase) * 0.8;
+
+      t.x += (dhx / dd + pvx * perp) * t.speed;
+      t.y += (dhy / dd + pvy * perp) * t.speed;
       t.speed += t.accel;
+
       if (Math.hypot(t.x - this.ui.enemyCenterX, t.y - this.ui.heroCenterY) < heroR) {
         ep.targets.splice(i, 1);
         ep.unblockedHits++;
         this._advanceStrike();
       }
+    }
+
+    // Age pop bursts
+    for (let i = ep.pops.length - 1; i >= 0; i--) {
+      if (++ep.pops[i].age >= ep.pops[i].maxAge) ep.pops.splice(i, 1);
     }
 
     // Inter-strike delay
@@ -487,16 +512,13 @@ class Game {
     const ep = this.enemyPhase;
     const ex = this.ui.enemyCenterX + (Math.random() - 0.5) * 80;
     const ey = this.ui.enemyCenterY + 75;
-    const hx = this.ui.enemyCenterX;
-    const hy = this.ui.heroCenterY;
-    const dist = Math.hypot(hx - ex, hy - ey);
     ep.targets.push({
       x: ex, y: ey,
-      vx: (hx - ex) / dist,
-      vy: (hy - ey) / dist,
-      speed: this.encounterConfig.bubbleSpeed,
-      accel: this.encounterConfig.bubbleAccel,
-      radius: 28,
+      speed:       this.encounterConfig.bubbleSpeed,
+      accel:       this.encounterConfig.bubbleAccel,
+      radius:      28,
+      hitRadius:   44,
+      spiralPhase: Math.random() * Math.PI * 2,
     });
     this.sound.bubbleFire();
   }
@@ -529,7 +551,7 @@ class Game {
     this.ui.drawPlayerMPBar(this.player);
 
     if (ep.windUpDone) {
-      this.ui.drawBubbles(ep.targets);
+      this.ui.drawBubbles(ep.targets, ep.pops);
       this.ui.drawStatusMessage('TAP BUBBLES TO BLOCK!', this.ui.C.blueLight);
     }
 
@@ -548,7 +570,8 @@ class Game {
       const t  = ep.targets[i];
       const dx = gesture.x - t.x;
       const dy = gesture.y - t.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= t.radius) {
+      if (Math.sqrt(dx * dx + dy * dy) <= t.hitRadius) {
+        ep.pops.push({ x: t.x, y: t.y, age: 0, maxAge: 20 });
         ep.targets.splice(i, 1);
         this.sound.block();
         this._advanceStrike();

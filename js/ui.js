@@ -470,15 +470,21 @@ class UI {
    * @param {string} mode         'idle' | 'attack' | 'magic'
    * @param {number} modeData     attack: hit intensity 0..1 | magic: chargeRatio 0..1
    */
-  drawPlayerAvatar(player, flashTimer, mode = 'idle', modeData = 0) {
+  drawPlayerAvatar(player, flashTimer, mode = 'idle', modeData = 0, swipeDir = null) {
     const p      = this.p;
-    const cx     = this.w / 2;
     const radius = 36;
     const points = 5;
 
-    // During attack the hero leans upward toward the enemy
-    const leanY  = mode === 'attack' ? -12 : 0;
-    const cy     = this.heroCenterY + leanY;
+    // In attack mode, lean the hero body toward the swipe direction
+    let cxOff = 0, cyOff = 0;
+    if (mode === 'attack') {
+      if      (swipeDir === 'left')  { cxOff = -12; cyOff = -4; }
+      else if (swipeDir === 'right') { cxOff =  12; cyOff = -4; }
+      else if (swipeDir === 'down')  { cxOff =   0; cyOff =  6; }
+      else                           { cxOff =   0; cyOff = -12; } // up or null = lean up
+    }
+    const cx = this.w / 2 + cxOff;
+    const cy = this.heroCenterY + cyOff;
 
     // ── Mode-specific aura ──────────────────────────────────────────────────
 
@@ -501,7 +507,7 @@ class UI {
         p.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, 5);
       }
     } else if (mode === 'attack') {
-      // Pulsing energy rings radiating upward
+      // Pulsing energy rings
       p.noStroke();
       const pulse = (Math.sin(p.frameCount * 0.18) + 1) / 2;
       for (let i = 2; i >= 1; i--) {
@@ -509,15 +515,31 @@ class UI {
         p.fill(...this.C.blue, 20 - i * 6);
         p.ellipse(cx, cy, r * 2, r * 1.7);
       }
-      // Energy slash lines radiating upward from the hero
-      p.stroke(...this.C.blue, 140 + Math.round(pulse * 80));
-      p.strokeWeight(2);
-      for (let i = 0; i < 3; i++) {
-        const a = -Math.PI / 2 + (i - 1) * 0.3;
-        const r1 = radius + 10;
-        const r2 = radius + 38 + pulse * 18;
-        p.line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1,
-               cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+      // Directional energy slash — bright right after a swipe, fades over 18 frames
+      const slashAngle = { up: -Math.PI/2, down: Math.PI/2, left: Math.PI, right: 0 }[swipeDir] ?? -Math.PI/2;
+      const slashAlpha = Math.round(modeData * 220);
+      p.noFill();
+      if (slashAlpha > 8) {
+        p.stroke(...this.C.blue, slashAlpha);
+        p.strokeWeight(2.5);
+        for (let i = 0; i < 3; i++) {
+          const a  = slashAngle + (i - 1) * 0.28;
+          const r1 = radius + 8;
+          const r2 = radius + 40 + modeData * 20;
+          p.line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1,
+                 cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+        }
+      } else {
+        // Idle "ready" slashes at low alpha when no recent swipe
+        p.stroke(...this.C.blue, 50 + pulse * 40);
+        p.strokeWeight(1.5);
+        for (let i = 0; i < 3; i++) {
+          const a  = -Math.PI / 2 + (i - 1) * 0.3;
+          const r1 = radius + 8;
+          const r2 = radius + 28 + pulse * 10;
+          p.line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1,
+                 cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+        }
       }
       p.noStroke();
     } else {
@@ -587,8 +609,8 @@ class UI {
   }
 
   // ── Attack bubbles ────────────────────────────────────────────────────────
-  /** Draws moving enemy projectile bubbles. */
-  drawBubbles(bubbles) {
+  /** Draws moving enemy projectile bubbles and pop burst animations. */
+  drawBubbles(bubbles, pops = []) {
     const p = this.p;
     for (const b of bubbles) {
       // Outer glow
@@ -612,6 +634,34 @@ class UI {
       p.fill(...this.C.blueLight, 230);
       p.ellipse(b.x, b.y, 8, 8);
     }
+
+    // Pop burst animations
+    for (const pop of pops) {
+      const ratio = pop.age / pop.maxAge;
+      const alpha = Math.round(255 * (1 - ratio));
+
+      // Inner expanding ring
+      p.noFill();
+      p.stroke(...this.C.blue, Math.round(alpha * 0.85));
+      p.strokeWeight(2);
+      p.ellipse(pop.x, pop.y, (28 + ratio * 60) * 2, (28 + ratio * 60) * 2);
+
+      // Outer expanding ring
+      p.stroke(...this.C.blueLight, Math.round(alpha * 0.45));
+      p.strokeWeight(1);
+      p.ellipse(pop.x, pop.y, (28 + ratio * 90) * 2, (28 + ratio * 90) * 2);
+
+      // Six outward particles
+      p.noStroke();
+      const dotSize = Math.max(0, 5 * (1 - ratio));
+      p.fill(...this.C.blueLight, alpha);
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        const r = 28 + ratio * 55;
+        p.ellipse(pop.x + Math.cos(a) * r, pop.y + Math.sin(a) * r, dotSize, dotSize);
+      }
+    }
+
     p.noStroke();
   }
 
