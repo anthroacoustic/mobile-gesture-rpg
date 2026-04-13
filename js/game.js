@@ -477,8 +477,8 @@ class Game {
     const ep     = this.enemyPhase;
     const margin = 70;
     const maxR   = 52;
-    const minY   = this.ui.h * 0.56;
-    const maxY   = this.ui.h * 0.87;
+    const minY   = this.ui.h * 0.50;
+    const maxY   = this.ui.h * 0.72;
 
     ep.targets.push({
       x:          margin + maxR + Math.random() * (this.ui.w - margin * 2 - maxR * 2),
@@ -523,7 +523,7 @@ class Game {
       p.fill(...this.ui.C.blueLight, 155);
       p.textAlign(p.CENTER, p.CENTER);
       p.textSize(13);
-      p.text('TAP the circles to block!', this.ui.w / 2, this.ui.h * 0.92);
+      p.text('TAP the circles to block!', this.ui.w / 2, this.ui.h * 0.70);
     }
 
     this.ui.drawDamageNumbers(this.damageNumbers);

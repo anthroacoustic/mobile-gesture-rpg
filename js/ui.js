@@ -27,18 +27,14 @@ class UI {
   get enemyCenterX()  { return this.w / 2; }
   get enemyCenterY()  { return this.h * 0.36; }
   get dividerY()      { return this.h * 0.50; }
-  get playerNameY()   { return this.h * 0.63; }
-  get hpBarY()        { return this.h * 0.665; }
-  get mpBarY()        { return this.h * 0.705; }
+  get playerNameY()   { return this.h * 0.74; }
+  get hpBarY()        { return this.h * 0.775; }
+  get mpBarY()        { return this.h * 0.815; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {
     const p = this.p;
     p.background(...this.C.bg);
-    // Subtle divider between enemy and player halves
-    p.stroke(...this.C.blue, 35);
-    p.strokeWeight(1);
-    p.line(0, this.dividerY, this.w, this.dividerY);
     p.noStroke();
     // Version stamp
     p.fill(...this.C.textLight, 180);
