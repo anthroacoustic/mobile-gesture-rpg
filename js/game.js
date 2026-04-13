@@ -28,14 +28,18 @@ const ENCOUNTERS = [
     arrowCount:   3,
     arrowTimeout: 90,
     tapTimeout:   78,
+    bubbleSpeed:  3.0,
+    bubbleAccel:  0.055,
   },
   {
     label:        'Round 2',
     enemyName:    'Arc Phantom',
     createEnemy:  () => new Enemy('Arc Phantom', 160, 22, [3, 4], 'phantom'),
-    arrowCount:   4,     // one more arrow to swipe
-    arrowTimeout: 62,    // ~1.0s per arrow
-    tapTimeout:   52,    // ~0.87s to tap each circle
+    arrowCount:   4,
+    arrowTimeout: 62,
+    tapTimeout:   52,
+    bubbleSpeed:  5.0,
+    bubbleAccel:  0.095,
   },
 ];
 
@@ -452,12 +456,14 @@ class Game {
       return;
     }
 
-    // Shrink active targets
+    // Move bubbles toward hero; check for collision
+    const heroR = 42;
     for (let i = ep.targets.length - 1; i >= 0; i--) {
       const t = ep.targets[i];
-      t.radius -= t.shrinkRate;
-      t.alpha   = Math.round((t.radius / t.maxRadius) * 255);
-      if (t.radius <= 0) {
+      t.x += t.vx * t.speed;
+      t.y += t.vy * t.speed;
+      t.speed += t.accel;
+      if (Math.hypot(t.x - this.ui.enemyCenterX, t.y - this.ui.heroCenterY) < heroR) {
         ep.targets.splice(i, 1);
         ep.unblockedHits++;
         this._advanceStrike();
@@ -476,20 +482,21 @@ class Game {
   }
 
   _spawnStrike() {
-    const ep     = this.enemyPhase;
-    const margin = 70;
-    const maxR   = 52;
-    const minY   = this.ui.h * 0.50;
-    const maxY   = this.ui.h * 0.72;
-
+    const ep = this.enemyPhase;
+    const ex = this.ui.enemyCenterX + (Math.random() - 0.5) * 80;
+    const ey = this.ui.enemyCenterY + 75;
+    const hx = this.ui.enemyCenterX;
+    const hy = this.ui.heroCenterY;
+    const dist = Math.hypot(hx - ex, hy - ey);
     ep.targets.push({
-      x:          margin + maxR + Math.random() * (this.ui.w - margin * 2 - maxR * 2),
-      y:          minY + Math.random() * (maxY - minY),
-      maxRadius:  maxR,
-      radius:     maxR,
-      alpha:      255,
-      shrinkRate: maxR / ep.tapTimeout,
+      x: ex, y: ey,
+      vx: (hx - ex) / dist,
+      vy: (hy - ey) / dist,
+      speed: this.encounterConfig.bubbleSpeed,
+      accel: this.encounterConfig.bubbleAccel,
+      radius: 28,
     });
+    this.sound.bubbleFire();
   }
 
   _advanceStrike() {
@@ -514,18 +521,14 @@ class Game {
       this.ui.drawWindUp(progress);
     }
 
+    this.ui.drawPlayerAvatar(this.player, this.playerFlashTimer);
     this.ui.drawPlayerName(this.player);
     this.ui.drawPlayerHealthBar(this.player);
     this.ui.drawPlayerMPBar(this.player);
 
     if (ep.windUpDone) {
-      this.ui.drawTapTargets(ep.targets);
-      const p = this.p;
-      p.noStroke();
-      p.fill(...this.ui.C.blueLight, 155);
-      p.textAlign(p.CENTER, p.CENTER);
-      p.textSize(13);
-      p.text('TAP the circles to block!', this.ui.w / 2, this.ui.h * 0.70);
+      this.ui.drawBubbles(ep.targets);
+      this.ui.drawStatusMessage('TAP BUBBLES TO BLOCK!', this.ui.C.blueLight);
     }
 
     this.ui.drawDamageNumbers(this.damageNumbers);
@@ -543,7 +546,7 @@ class Game {
       const t  = ep.targets[i];
       const dx = gesture.x - t.x;
       const dy = gesture.y - t.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= t.maxRadius) {
+      if (Math.sqrt(dx * dx + dy * dy) <= t.radius) {
         ep.targets.splice(i, 1);
         this.sound.block();
         this._advanceStrike();
@@ -624,6 +627,7 @@ class Game {
   _drawBaseBattle() {
     this.ui.drawEnemyArea(this.enemy);
     this.ui.drawEnemyHealthBar(this.enemy);
+    this.ui.drawPlayerAvatar(this.player, this.playerFlashTimer);
     this.ui.drawPlayerName(this.player);
     this.ui.drawPlayerHealthBar(this.player);
     this.ui.drawPlayerMPBar(this.player);

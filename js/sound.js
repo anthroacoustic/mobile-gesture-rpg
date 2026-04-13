@@ -184,6 +184,13 @@ class SoundEngine {
     this.mem.triggerAttackRelease('D4', '32n');
   }
 
+  /** Short FM ping when the enemy fires a bubble toward the player. */
+  bubbleFire() {
+    if (!this._ready()) return;
+    this.fm.modulationIndex.value = 16;
+    this.fm.triggerAttackRelease('B4', '32n');
+  }
+
   /** Low crunch when an unblocked enemy hit lands on the player. */
   playerHit() {
     if (!this._ready()) return;

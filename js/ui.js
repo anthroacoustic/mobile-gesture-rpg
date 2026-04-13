@@ -31,6 +31,7 @@ class UI {
   get hpBarY()        { return this.h * 0.775; }
   get mpBarY()        { return this.h * 0.815; }
   get messageY()      { return this.h * 0.55; }
+  get heroCenterY()   { return this.h * 0.905; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {
@@ -459,6 +460,100 @@ class UI {
       p.noStroke();
       p.ellipse(t.x, t.y, 11, 11);
     }
+  }
+
+  // ── Hero avatar ──────────────────────────────────────────────────────────
+  /**
+   * Pentagon hero avatar at the bottom of the screen.
+   * @param {Player} player
+   * @param {number} flashTimer  >0 while taking damage (white flash)
+   */
+  drawPlayerAvatar(player, flashTimer) {
+    const p      = this.p;
+    const cx     = this.w / 2;
+    const cy     = this.heroCenterY;
+    const radius = 36;
+    const points = 5;
+
+    // Aura rings
+    p.noStroke();
+    for (let i = 2; i >= 1; i--) {
+      const r = radius + i * 14 + Math.sin(p.frameCount * 0.03 + i) * 4;
+      p.fill(...this.C.blue, 14 - i * 4);
+      p.ellipse(cx, cy, r * 2, r * 1.9);
+    }
+
+    // Pentagon body with per-vertex wobble
+    p.fill(...this.C.blue, 210);
+    p.stroke(...this.C.blueLight, 180);
+    p.strokeWeight(2);
+    p.beginShape();
+    for (let i = 0; i < points; i++) {
+      const angle  = (Math.PI * 2 / points) * i - Math.PI / 2;
+      const wobble = Math.sin(p.frameCount * 0.04 + i * 1.3) * 4;
+      p.vertex(cx + Math.cos(angle) * (radius + wobble),
+               cy + Math.sin(angle) * (radius + wobble));
+    }
+    p.endShape(p.CLOSE);
+
+    // Crest — small upward spike at top vertex
+    const topAngle = -Math.PI / 2;
+    const tx = cx + Math.cos(topAngle) * radius;
+    const ty = cy + Math.sin(topAngle) * radius;
+    p.fill(...this.C.blueLight, 200);
+    p.noStroke();
+    p.triangle(tx, ty - 14, tx - 6, ty, tx + 6, ty);
+
+    // Eye — thin horizontal slit
+    const eyeW = radius * 0.52;
+    const eyeH = radius * 0.10;
+    const eyeY = cy - radius * 0.08;
+    p.fill(255, 255, 255, 210);
+    p.noStroke();
+    p.ellipse(cx, eyeY, eyeW, eyeH);
+
+    // Hit flash overlay
+    if (flashTimer > 0) {
+      p.fill(255, 255, 255, Math.round((flashTimer / 22) * 200));
+      p.noStroke();
+      p.beginShape();
+      for (let i = 0; i < points; i++) {
+        const angle = (Math.PI * 2 / points) * i - Math.PI / 2;
+        p.vertex(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      }
+      p.endShape(p.CLOSE);
+    }
+
+    p.noStroke();
+  }
+
+  // ── Attack bubbles ────────────────────────────────────────────────────────
+  /** Draws moving enemy projectile bubbles. */
+  drawBubbles(bubbles) {
+    const p = this.p;
+    for (const b of bubbles) {
+      // Outer glow
+      p.noStroke();
+      p.fill(...this.C.blue, 28);
+      p.ellipse(b.x, b.y, b.radius * 3.2, b.radius * 3.2);
+
+      // Main ring
+      p.noFill();
+      p.stroke(...this.C.blue, 210);
+      p.strokeWeight(2.5);
+      p.ellipse(b.x, b.y, b.radius * 2, b.radius * 2);
+
+      // Inner ring
+      p.stroke(...this.C.blueLight, 140);
+      p.strokeWeight(1);
+      p.ellipse(b.x, b.y, b.radius * 1.2, b.radius * 1.2);
+
+      // Centre dot
+      p.noStroke();
+      p.fill(...this.C.blueLight, 230);
+      p.ellipse(b.x, b.y, 8, 8);
+    }
+    p.noStroke();
   }
 
   // ── Floating damage numbers ───────────────────────────────────────────────
