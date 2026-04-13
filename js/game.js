@@ -186,6 +186,8 @@ class Game {
         gp.radialHover,
         this.player.mp >= MAGIC_COST
       );
+    } else {
+      this.ui.drawStatusMessage('Your turn  —  press to open menu', this.ui.C.textLight);
     }
   }
 

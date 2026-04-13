@@ -30,6 +30,7 @@ class UI {
   get playerNameY()   { return this.h * 0.74; }
   get hpBarY()        { return this.h * 0.775; }
   get mpBarY()        { return this.h * 0.815; }
+  get messageY()      { return this.h * 0.535; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {
@@ -248,11 +249,6 @@ class UI {
     const cx = this.w / 2;
     const cy = this.h * 0.43;
 
-    // Dim lower portion
-    p.fill(0, 0, 0, 130);
-    p.noStroke();
-    p.rect(0, this.dividerY, this.w, this.h - this.dividerY);
-
     const rot = { up: -p.HALF_PI, down: p.HALF_PI, left: p.PI, right: 0 }[direction] ?? 0;
 
     // Glow halo
@@ -263,14 +259,14 @@ class UI {
     this._arrowShape(p, 0, 0, 72, [...this.C.blue, opacity]);
     p.pop();
 
-    // Direction label
+    // Direction label — in the shared message zone
     p.fill(...this.C.blueLight, Math.round(opacity * 0.85));
     p.noStroke();
     p.textAlign(p.CENTER, p.CENTER);
     p.textSize(13);
-    p.text('SWIPE  ' + direction.toUpperCase(), cx, cy + 62);
+    p.text('SWIPE  ' + direction.toUpperCase(), cx, this.messageY);
 
-    // Progress dots
+    // Progress dots just below the label
     const dotGap    = 22;
     const dotsStart = cx - ((total - 1) * dotGap) / 2;
     for (let i = 0; i < total; i++) {
@@ -281,7 +277,7 @@ class UI {
       } else {
         p.fill(70, 80, 100, 160);
       }
-      p.ellipse(dotsStart + i * dotGap, cy + 86, 9, 9);
+      p.ellipse(dotsStart + i * dotGap, this.messageY + 22, 9, 9);
     }
   }
 
@@ -425,9 +421,19 @@ class UI {
       p.textAlign(p.CENTER, p.CENTER);
       p.textSize(17);
       p.textStyle(p.BOLD);
-      p.text('INCOMING!', cx, cy + 108);
+      p.text('INCOMING!', cx, this.messageY);
       p.textStyle(p.NORMAL);
     }
+  }
+
+  /** Draws a line of text in the shared message zone. */
+  drawStatusMessage(text, color, alpha = 190) {
+    const p = this.p;
+    p.noStroke();
+    p.fill(...color, alpha);
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(14);
+    p.text(text, this.w / 2, this.messageY);
   }
 
   // ── Tap-to-block targets ──────────────────────────────────────────────────
