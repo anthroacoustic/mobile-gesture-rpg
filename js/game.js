@@ -106,6 +106,14 @@ class Game {
     this.lastTouchX = x;
     this.lastTouchY = y;
 
+    // Radial menu — show on touch-down during player choice
+    if (this.state === STATES.PLAYER_CHOICE) {
+      this.sound.unlock();
+      this.gesturePhase.showRadial   = true;
+      this.gesturePhase.radialOrigin = { x, y };
+      this.gesturePhase.radialHover  = null;
+    }
+
     // Magic charging begins on touch-down
     if (this.state === STATES.GESTURE_MAGIC && !this.gesturePhase.charging) {
       this.gesturePhase.charging    = true;
@@ -117,6 +125,15 @@ class Game {
   onTouchMove(x, y) {
     this.lastTouchX = x;
     this.lastTouchY = y;
+
+    // Update radial hover sector
+    if (this.state === STATES.PLAYER_CHOICE && this.gesturePhase.showRadial) {
+      const { x: ox, y: oy } = this.gesturePhase.radialOrigin;
+      const dist = Math.hypot(x - ox, y - oy);
+      this.gesturePhase.radialHover = dist >= 44
+        ? this._radialSector(Math.atan2(y - oy, x - ox))
+        : null;
+    }
   }
 
   onGesture(gesture) {
@@ -154,35 +171,46 @@ class Game {
   _setupPlayerChoice() {
     this.player.setDefending(false);
     this.enemy.setWindUp(1.0);
-    this.gesturePhase = {};
+    this.gesturePhase = { showRadial: false, radialOrigin: null, radialHover: null };
     // Restore a small amount of MP each turn
     this.player.restoreMP(7);
   }
 
   _drawPlayerChoice() {
     this._drawBaseBattle();
+    const gp = this.gesturePhase;
+    if (gp.showRadial && gp.radialOrigin) {
+      this.ui.drawRadialMenu(
+        gp.radialOrigin.x,
+        gp.radialOrigin.y,
+        gp.radialHover,
+        this.player.mp >= MAGIC_COST
+      );
+    }
   }
 
   _handleChoiceGesture(gesture) {
-    if (gesture.type !== 'tap') return;
-    this.sound.unlock(); // No-op if already unlocked; resumes AudioContext on first gesture
-    const rects = this.ui.getButtonRects();
-    for (const btn of rects) {
-      if (this._hitTest(gesture.x, gesture.y, btn)) {
-        this.sound.uiTap();
-        if (btn.action === 'attack') {
-          this._enterState(STATES.GESTURE_ATTACK);
-        } else if (btn.action === 'magic') {
-          if (this.player.mp >= MAGIC_COST) {
-            this._enterState(STATES.GESTURE_MAGIC);
-          }
-        } else if (btn.action === 'defend') {
-          this.player.setDefending(true);
-          this._enterState(STATES.ENEMY_ATTACK);
-        }
-        break;
-      }
+    const gp  = this.gesturePhase;
+    gp.showRadial = false;
+    const action  = gp.radialHover;
+    if (!action) return;
+    this.sound.uiTap();
+    if (action === 'attack') {
+      this._enterState(STATES.GESTURE_ATTACK);
+    } else if (action === 'magic') {
+      if (this.player.mp >= MAGIC_COST) this._enterState(STATES.GESTURE_MAGIC);
+    } else if (action === 'defend') {
+      this.player.setDefending(true);
+      this._enterState(STATES.ENEMY_ATTACK);
     }
+  }
+
+  _radialSector(angle) {
+    // atan2 returns -PI..+PI; sector boundaries at -5π/6, -π/6, +π/2
+    const PI = Math.PI;
+    if (angle >= -5 * PI / 6 && angle < -PI / 6) return 'attack';  // upward
+    if (angle >= -PI / 6     && angle <  PI / 2) return 'defend';  // down-right
+    return 'magic';                                                   // down-left
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -597,7 +625,6 @@ class Game {
     this.ui.drawPlayerName(this.player);
     this.ui.drawPlayerHealthBar(this.player);
     this.ui.drawPlayerMPBar(this.player);
-    this.ui.drawActionButtons(-1, this.player.mp >= MAGIC_COST);
     this.ui.drawDamageNumbers(this.damageNumbers);
     if (this.playerFlashTimer > 0) {
       this.ui.drawFlashOverlay(this.playerFlashTimer * 7);
@@ -611,8 +638,5 @@ class Game {
     );
   }
 
-  _hitTest(x, y, rect) {
-    return x >= rect.x && x <= rect.x + rect.w &&
-           y >= rect.y && y <= rect.y + rect.h;
-  }
 }
+

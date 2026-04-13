@@ -25,14 +25,11 @@ class UI {
   get w()             { return this.p.width; }
   get h()             { return this.p.height; }
   get enemyCenterX()  { return this.w / 2; }
-  get enemyCenterY()  { return this.h * 0.28; }
-  get dividerY()      { return this.h * 0.52; }
-  get playerNameY()   { return this.h * 0.575; }
-  get hpBarY()        { return this.h * 0.615; }
-  get mpBarY()        { return this.h * 0.655; }
-  get buttonAreaY()   { return this.h * 0.73; }
-  get buttonH()       { return Math.max(68, this.h * 0.105); }
-  get buttonW()       { return Math.min(115, this.w * 0.29); }
+  get enemyCenterY()  { return this.h * 0.36; }
+  get dividerY()      { return this.h * 0.50; }
+  get playerNameY()   { return this.h * 0.63; }
+  get hpBarY()        { return this.h * 0.665; }
+  get mpBarY()        { return this.h * 0.705; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {
@@ -139,72 +136,107 @@ class UI {
     p.textStyle(p.NORMAL);
   }
 
-  // ── Action buttons ───────────────────────────────────────────────────────
+  // ── Radial action menu ───────────────────────────────────────────────────
   /**
-   * @param {number} selectedIdx  -1 = none highlighted
-   * @param {boolean} mpOk        whether magic button is enabled
+   * Three 120° sectors centred on the touch origin.
+   * Sectors: attack (up), defend (down-right), magic (down-left).
+   * @param {number}      ox            touch origin x
+   * @param {number}      oy            touch origin y
+   * @param {string|null} hoveredSector 'attack'|'defend'|'magic'|null
+   * @param {boolean}     mpOk          whether magic is available
    */
-  drawActionButtons(selectedIdx, mpOk) {
-    const p       = this.p;
-    const btns    = this.getButtonRects();
-    const icons   = ['\u2694', '\u2726', '\uD83D\uDEE1'];  // ⚔ ✦ 🛡
-    const labels  = ['Attack', 'Magic', 'Defend'];
+  drawRadialMenu(ox, oy, hoveredSector, mpOk) {
+    const p          = this.p;
+    const innerR     = 52;
+    const outerR     = 145;
+    const GAP        = 0.07; // radians gap between sectors
 
-    for (let i = 0; i < btns.length; i++) {
-      const btn        = btns[i];
-      const isSelected = i === selectedIdx;
-      const isDisabled = i === 1 && !mpOk;
-
-      p.noStroke();
-      if (isDisabled) {
-        p.fill(35, 35, 55, 120);
-      } else if (isSelected) {
-        p.fill(...this.C.blue, 215);
-      } else {
-        p.fill(55, 25, 55, 200);
-      }
-      this._roundRect(btn.x, btn.y, btn.w, btn.h, 14);
-
-      // Border
-      if (!isDisabled) {
-        const borderCol = isSelected ? this.C.blueLight : this.C.pinkDark;
-        p.stroke(...borderCol, 155);
-        p.strokeWeight(1.5);
-        p.noFill();
-        this._roundRect(btn.x, btn.y, btn.w, btn.h, 14);
-        p.noStroke();
-      }
-
-      // Icon
-      const iconAlpha = isDisabled ? 90 : 230;
-      const iconCol   = isDisabled ? [100, 100, 120] : (isSelected ? this.C.bg : this.C.pink);
-      p.fill(...iconCol, iconAlpha);
-      p.textAlign(p.CENTER, p.CENTER);
-      p.textSize(24);
-      p.text(icons[i], btn.x + btn.w / 2, btn.y + btn.h / 2 - 9);
-
-      // Label
-      const lblAlpha = isDisabled ? 80 : 175;
-      const lblCol   = isDisabled ? [100, 100, 120] : (isSelected ? this.C.bg : this.C.textLight);
-      p.fill(...lblCol, lblAlpha);
-      p.textSize(11);
-      p.text(labels[i], btn.x + btn.w / 2, btn.y + btn.h / 2 + 14);
-    }
-  }
-
-  /** Returns hit-test rects: [{x, y, w, h, action}] */
-  getButtonRects() {
-    const gap    = 12;
-    const totalW = this.buttonW * 3 + gap * 2;
-    const startX = (this.w - totalW) / 2;
-    const y      = this.buttonAreaY;
-    const h      = this.buttonH;
-    const w      = this.buttonW;
-    return [
-      { x: startX,                  y, w, h, action: 'attack' },
-      { x: startX + (w + gap),      y, w, h, action: 'magic'  },
-      { x: startX + (w + gap) * 2,  y, w, h, action: 'defend' },
+    const sectors = [
+      {
+        id:     'attack',
+        start:  -5 * Math.PI / 6 + GAP,
+        stop:   -Math.PI / 6     - GAP,
+        mid:    -Math.PI / 2,
+        icon:   '\u2694',
+        label:  'Attack',
+        color:  this.C.blue,
+      },
+      {
+        id:     'defend',
+        start:  -Math.PI / 6     + GAP,
+        stop:    Math.PI / 2     - GAP,
+        mid:     Math.PI / 6,
+        icon:   '\uD83D\uDEE1',
+        label:  'Defend',
+        color:  this.C.blue,
+      },
+      {
+        id:     'magic',
+        start:   Math.PI / 2     + GAP,
+        stop:    7 * Math.PI / 6 - GAP,
+        mid:     5 * Math.PI / 6,
+        icon:   '\u2726',
+        label:  'Magic',
+        color:  this.C.pink,
+      },
     ];
+
+    // Draw filled sector wedges
+    p.noStroke();
+    for (const s of sectors) {
+      const hovered  = hoveredSector === s.id;
+      const disabled = s.id === 'magic' && !mpOk;
+      if (disabled) {
+        p.fill(50, 50, 70, 130);
+      } else if (hovered) {
+        p.fill(...s.color, 220);
+      } else {
+        p.fill(40, 20, 60, 200);
+      }
+      p.arc(ox, oy, outerR * 2, outerR * 2, s.start, s.stop, p.PIE);
+    }
+
+    // Sector borders
+    for (const s of sectors) {
+      const hovered  = hoveredSector === s.id;
+      const disabled = s.id === 'magic' && !mpOk;
+      if (!disabled) {
+        p.noFill();
+        p.stroke(...s.color, hovered ? 255 : 130);
+        p.strokeWeight(1.5);
+        p.arc(ox, oy, outerR * 2, outerR * 2, s.start, s.stop, p.PIE);
+      }
+    }
+
+    // Donut cutout — background circle erases wedge centres
+    p.noStroke();
+    p.fill(...this.C.bg);
+    p.ellipse(ox, oy, innerR * 2, innerR * 2);
+
+    // Centre hint
+    p.fill(...this.C.textLight, 90);
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(10);
+    p.text('drag', ox, oy);
+
+    // Icons + labels at mid-radius of each sector
+    const midR = (innerR + outerR) / 2;
+    for (const s of sectors) {
+      const hovered  = hoveredSector === s.id;
+      const disabled = s.id === 'magic' && !mpOk;
+      const ix = ox + Math.cos(s.mid) * midR;
+      const iy = oy + Math.sin(s.mid) * midR;
+
+      p.fill(...(disabled ? [80, 80, 100] : (hovered ? this.C.bg : s.color)),
+             disabled ? 100 : 230);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textSize(22);
+      p.text(s.icon, ix, iy - 9);
+      p.textSize(11);
+      p.text(s.label, ix, iy + 13);
+    }
+
+    p.noStroke();
   }
 
   // ── Swipe attack gesture ──────────────────────────────────────────────────
@@ -218,7 +250,7 @@ class UI {
   drawArrowPrompt(direction, opacity, doneCount, total, timerRatio) {
     const p  = this.p;
     const cx = this.w / 2;
-    const cy = this.h * 0.38;
+    const cy = this.h * 0.43;
 
     // Dim lower portion
     p.fill(0, 0, 0, 130);
@@ -311,7 +343,7 @@ class UI {
   drawMagicCharge(chargeRatio, targetMin, targetMax) {
     const p         = this.p;
     const cx        = this.w / 2;
-    const cy        = this.h * 0.36;
+    const cy        = this.h * 0.42;
     const maxRadius = Math.min(this.w, this.h) * 0.21;
 
     // Full overlay
