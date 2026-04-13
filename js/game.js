@@ -284,6 +284,7 @@ class Game {
       this.ui.drawHitMissFlash(gp.resultIsHit, Math.round((gp.resultTimer / 22) * 220));
     }
 
+    this.ui.drawPlayerAvatar(this.player, 0, 'attack');
     this.ui.drawDamageNumbers(this.damageNumbers);
   }
 
@@ -358,6 +359,7 @@ class Game {
     this.ui.drawEnemyArea(this.enemy);
     this.ui.drawEnemyHealthBar(this.enemy);
     this.ui.drawMagicCharge(gp.chargeRatio, gp.targetMin, gp.targetMax);
+    this.ui.drawPlayerAvatar(this.player, 0, 'magic', gp.chargeRatio);
   }
 
   /** Any touchEnd while charging triggers the release. */

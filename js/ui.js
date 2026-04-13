@@ -27,11 +27,11 @@ class UI {
   get enemyCenterX()  { return this.w / 2; }
   get enemyCenterY()  { return this.h * 0.36; }
   get dividerY()      { return this.h * 0.50; }
-  get playerNameY()   { return this.h * 0.74; }
-  get hpBarY()        { return this.h * 0.775; }
-  get mpBarY()        { return this.h * 0.815; }
+  get playerNameY()   { return this.h * 0.815; }
+  get hpBarY()        { return this.h * 0.845; }
+  get mpBarY()        { return this.h * 0.885; }
   get messageY()      { return this.h * 0.55; }
-  get heroCenterY()   { return this.h * 0.905; }
+  get heroCenterY()   { return this.h * 0.735; }
 
   // ── Core layout ──────────────────────────────────────────────────────────
   drawBackground() {
@@ -466,53 +466,112 @@ class UI {
   /**
    * Pentagon hero avatar at the bottom of the screen.
    * @param {Player} player
-   * @param {number} flashTimer  >0 while taking damage (white flash)
+   * @param {number} flashTimer   >0 while taking damage (white flash)
+   * @param {string} mode         'idle' | 'attack' | 'magic'
+   * @param {number} modeData     attack: hit intensity 0..1 | magic: chargeRatio 0..1
    */
-  drawPlayerAvatar(player, flashTimer) {
+  drawPlayerAvatar(player, flashTimer, mode = 'idle', modeData = 0) {
     const p      = this.p;
     const cx     = this.w / 2;
-    const cy     = this.heroCenterY;
     const radius = 36;
     const points = 5;
 
-    // Aura rings
-    p.noStroke();
-    for (let i = 2; i >= 1; i--) {
-      const r = radius + i * 14 + Math.sin(p.frameCount * 0.03 + i) * 4;
-      p.fill(...this.C.blue, 14 - i * 4);
-      p.ellipse(cx, cy, r * 2, r * 1.9);
+    // During attack the hero leans upward toward the enemy
+    const leanY  = mode === 'attack' ? -12 : 0;
+    const cy     = this.heroCenterY + leanY;
+
+    // ── Mode-specific aura ──────────────────────────────────────────────────
+
+    if (mode === 'magic') {
+      // Expanding charged aura — grows and shifts colour with chargeRatio
+      const inTarget = modeData >= 0.6 && modeData <= 0.85;
+      const auraCol  = inTarget ? this.C.pink : this.C.blue;
+      p.noStroke();
+      for (let i = 3; i >= 1; i--) {
+        const r = radius + i * 18 * (0.4 + modeData * 0.9) +
+                  Math.sin(p.frameCount * 0.07 + i) * 6;
+        p.fill(...auraCol, (inTarget ? 28 : 16) - i * 4);
+        p.ellipse(cx, cy, r * 2, r * 2);
+      }
+      // Orbiting spark dots
+      for (let i = 0; i < 5; i++) {
+        const a = p.frameCount * 0.06 + (i * Math.PI * 2 / 5);
+        const r = radius + 22 + modeData * 28;
+        p.fill(...auraCol, 170 * modeData);
+        p.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, 5);
+      }
+    } else if (mode === 'attack') {
+      // Pulsing energy rings radiating upward
+      p.noStroke();
+      const pulse = (Math.sin(p.frameCount * 0.18) + 1) / 2;
+      for (let i = 2; i >= 1; i--) {
+        const r = radius + i * 16 + pulse * 10;
+        p.fill(...this.C.blue, 20 - i * 6);
+        p.ellipse(cx, cy, r * 2, r * 1.7);
+      }
+      // Energy slash lines radiating upward from the hero
+      p.stroke(...this.C.blue, 140 + Math.round(pulse * 80));
+      p.strokeWeight(2);
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i - 1) * 0.3;
+        const r1 = radius + 10;
+        const r2 = radius + 38 + pulse * 18;
+        p.line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1,
+               cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+      }
+      p.noStroke();
+    } else {
+      // Idle aura
+      p.noStroke();
+      for (let i = 2; i >= 1; i--) {
+        const r = radius + i * 14 + Math.sin(p.frameCount * 0.03 + i) * 4;
+        p.fill(...this.C.blue, 14 - i * 4);
+        p.ellipse(cx, cy, r * 2, r * 1.9);
+      }
     }
 
-    // Pentagon body with per-vertex wobble
-    p.fill(...this.C.blue, 210);
+    // ── Pentagon body ───────────────────────────────────────────────────────
+
+    // Body colour shifts blue → pink when magic is charged into target band
+    let bodyR = this.C.blue[0], bodyG = this.C.blue[1], bodyB = this.C.blue[2];
+    if (mode === 'magic' && modeData > 0) {
+      const t = Math.min(1, modeData / 0.6);
+      bodyR = Math.round(bodyR + (this.C.pink[0] - bodyR) * t);
+      bodyG = Math.round(bodyG + (this.C.pink[1] - bodyG) * t);
+      bodyB = Math.round(bodyB + (this.C.pink[2] - bodyB) * t);
+    }
+    // Attack: wobble faster and more intensely
+    const wobbleSpeed = mode === 'attack' ? 0.14 : 0.04;
+    const wobbleAmp   = mode === 'attack' ? 7    : 4;
+
+    p.fill(bodyR, bodyG, bodyB, 210);
     p.stroke(...this.C.blueLight, 180);
     p.strokeWeight(2);
     p.beginShape();
     for (let i = 0; i < points; i++) {
       const angle  = (Math.PI * 2 / points) * i - Math.PI / 2;
-      const wobble = Math.sin(p.frameCount * 0.04 + i * 1.3) * 4;
+      const wobble = Math.sin(p.frameCount * wobbleSpeed + i * 1.3) * wobbleAmp;
       p.vertex(cx + Math.cos(angle) * (radius + wobble),
                cy + Math.sin(angle) * (radius + wobble));
     }
     p.endShape(p.CLOSE);
 
-    // Crest — small upward spike at top vertex
-    const topAngle = -Math.PI / 2;
-    const tx = cx + Math.cos(topAngle) * radius;
-    const ty = cy + Math.sin(topAngle) * radius;
+    // Crest — small upward spike
+    const tx = cx;
+    const ty = cy - radius;
     p.fill(...this.C.blueLight, 200);
     p.noStroke();
     p.triangle(tx, ty - 14, tx - 6, ty, tx + 6, ty);
 
-    // Eye — thin horizontal slit
-    const eyeW = radius * 0.52;
-    const eyeH = radius * 0.10;
+    // Eye — thin horizontal slit (narrows when attacking)
+    const eyeW = mode === 'attack' ? radius * 0.52 : radius * 0.52;
+    const eyeH = mode === 'attack' ? radius * 0.06 : radius * 0.10;
     const eyeY = cy - radius * 0.08;
     p.fill(255, 255, 255, 210);
     p.noStroke();
     p.ellipse(cx, eyeY, eyeW, eyeH);
 
-    // Hit flash overlay
+    // ── Hit flash overlay ───────────────────────────────────────────────────
     if (flashTimer > 0) {
       p.fill(255, 255, 255, Math.round((flashTimer / 22) * 200));
       p.noStroke();
