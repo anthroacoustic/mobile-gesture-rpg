@@ -1,8 +1,5 @@
 const STATES = {
-  PLAYER_CHOICE:   'PLAYER_CHOICE',
-  GESTURE_ATTACK:  'GESTURE_ATTACK',
-  GESTURE_MAGIC:   'GESTURE_MAGIC',
-  RESOLVE_PLAYER:  'RESOLVE_PLAYER',
+  PLAYER_TURN:     'PLAYER_TURN',
   ENEMY_ATTACK:    'ENEMY_ATTACK',
   RESOLVE_ENEMY:   'RESOLVE_ENEMY',
   ENCOUNTER_CLEAR: 'ENCOUNTER_CLEAR',
@@ -10,36 +7,34 @@ const STATES = {
   DEFEAT:          'DEFEAT',
 };
 
-const ALL_DIRECTIONS = ['up', 'down', 'left', 'right'];
-const MAGIC_COST     = 15;
-const MAGIC_DURATION = 2200; // ms for full charge
+const MAGIC_DURATION     = 2200;  // ms for full charge
+const SWIPE_DAMAGE_RATIO = 0.35;  // player.atk × ratio per swipe
+const MISSILE_MIN_CHARGE = 0.2;   // minimum charge fraction to fire a missile
+const MISSILE_SPEED      = 10;    // px/frame — straight toward enemy
 
 /**
- * Encounter configs drive both enemy creation and per-round timing difficulty.
- * arrowCount:   number of swipe arrows in an attack combo
- * arrowTimeout: frames the player has per arrow  (90 = ~1.5s, 62 = ~1.0s)
- * tapTimeout:   frames before a block circle vanishes (78 = ~1.3s, 52 = ~0.87s)
+ * Encounter configs drive enemy creation and per-round timing.
+ * playerTurnDuration: frames the player has to act (600 = ~10s, 360 = ~6s)
+ * tapTimeout:         frames before a block bubble vanishes
  */
 const ENCOUNTERS = [
   {
-    label:        'Round 1',
-    enemyName:    'Void Wraith',
-    createEnemy:  () => new Enemy('Void Wraith', 120, 15, [2, 3], 'wraith'),
-    arrowCount:   3,
-    arrowTimeout: 90,
-    tapTimeout:   78,
-    bubbleSpeed:  2.2,
-    bubbleAccel:  0.04,
+    label:              'Round 1',
+    enemyName:          'Void Wraith',
+    createEnemy:        () => new Enemy('Void Wraith', 120, 15, [2, 3], 'wraith'),
+    playerTurnDuration: 600,
+    tapTimeout:         78,
+    bubbleSpeed:        2.2,
+    bubbleAccel:        0.04,
   },
   {
-    label:        'Round 2',
-    enemyName:    'Arc Phantom',
-    createEnemy:  () => new Enemy('Arc Phantom', 160, 22, [3, 4], 'phantom'),
-    arrowCount:   4,
-    arrowTimeout: 62,
-    tapTimeout:   52,
-    bubbleSpeed:  3.8,
-    bubbleAccel:  0.07,
+    label:              'Round 2',
+    enemyName:          'Arc Phantom',
+    createEnemy:        () => new Enemy('Arc Phantom', 160, 22, [3, 4], 'phantom'),
+    playerTurnDuration: 360,
+    tapTimeout:         52,
+    bubbleSpeed:        3.8,
+    bubbleAccel:        0.07,
   },
 ];
 
@@ -67,11 +62,11 @@ class Game {
     this.lastTouchY = 0;
 
     // Per-state working data
-    this.gesturePhase = {};
+    this.playerPhase  = {};
     this.resolvePhase = {};
     this.enemyPhase   = {};
 
-    this._enterState(STATES.PLAYER_CHOICE);
+    this._enterState(STATES.PLAYER_TURN);
   }
 
   // ── Core loop ─────────────────────────────────────────────────────────────
@@ -81,9 +76,7 @@ class Game {
     if (this.playerFlashTimer > 0) this.playerFlashTimer--;
 
     switch (this.state) {
-      case STATES.GESTURE_ATTACK:  this._updateGestureAttack();  break;
-      case STATES.GESTURE_MAGIC:   this._updateGestureMagic();   break;
-      case STATES.RESOLVE_PLAYER:  this._updateResolvePlayer();  break;
+      case STATES.PLAYER_TURN:     this._updatePlayerTurn();     break;
       case STATES.ENEMY_ATTACK:    this._updateEnemyAttack();    break;
       case STATES.RESOLVE_ENEMY:   this._updateResolveEnemy();   break;
       case STATES.ENCOUNTER_CLEAR: this._updateEncounterClear(); break;
@@ -93,11 +86,8 @@ class Game {
   draw() {
     this.ui.drawBackground();
     switch (this.state) {
-      case STATES.PLAYER_CHOICE:  this._drawPlayerChoice();  break;
-      case STATES.GESTURE_ATTACK: this._drawGestureAttack(); break;
-      case STATES.GESTURE_MAGIC:  this._drawGestureMagic();  break;
-      case STATES.RESOLVE_PLAYER: this._drawBaseBattle();    break;
-      case STATES.ENEMY_ATTACK:   this._drawEnemyAttack();   break;
+      case STATES.PLAYER_TURN:     this._drawPlayerTurn();    break;
+      case STATES.ENEMY_ATTACK:    this._drawEnemyAttack();   break;
       case STATES.RESOLVE_ENEMY:   this._drawBaseBattle();    break;
       case STATES.ENCOUNTER_CLEAR: this._drawEncounterClear(); break;
       case STATES.VICTORY:         this._drawBaseBattle(); this.ui.drawVictoryScreen(this.enemy.name); break;
@@ -110,43 +100,26 @@ class Game {
     this.lastTouchX = x;
     this.lastTouchY = y;
 
-    // Radial menu — show on touch-down during player choice
-    if (this.state === STATES.PLAYER_CHOICE) {
+    if (this.state === STATES.PLAYER_TURN) {
       this.sound.unlock();
-      this.gesturePhase.showRadial   = true;
-      this.gesturePhase.radialOrigin = { x, y };
-      this.gesturePhase.radialHover  = null;
-    }
-
-    // Magic charging begins on touch-down
-    if (this.state === STATES.GESTURE_MAGIC && !this.gesturePhase.charging) {
-      this.gesturePhase.charging    = true;
-      this.gesturePhase.chargeStart = this.p.millis();
-      this.sound.magicChargeStart();
+      const pp = this.playerPhase;
+      if (pp.holdStart === null) {
+        pp.holdStart = this.p.millis();
+        this.sound.magicChargeStart();
+      }
     }
   }
 
   onTouchMove(x, y) {
     this.lastTouchX = x;
     this.lastTouchY = y;
-
-    // Update radial hover sector
-    if (this.state === STATES.PLAYER_CHOICE && this.gesturePhase.showRadial) {
-      const { x: ox, y: oy } = this.gesturePhase.radialOrigin;
-      const dist = Math.hypot(x - ox, y - oy);
-      this.gesturePhase.radialHover = dist >= 44
-        ? this._radialSector(Math.atan2(y - oy, x - ox))
-        : null;
-    }
   }
 
   onGesture(gesture) {
     this.sound.unlock(); // retry on touchend — more reliable on strict browsers
     switch (this.state) {
-      case STATES.PLAYER_CHOICE:  this._handleChoiceGesture(gesture);  break;
-      case STATES.GESTURE_ATTACK: this._handleAttackGesture(gesture);  break;
-      case STATES.GESTURE_MAGIC:  this._handleMagicGesture(gesture);   break;
-      case STATES.ENEMY_ATTACK:   this._handleEnemyTap(gesture);       break;
+      case STATES.PLAYER_TURN:  this._handlePlayerTurnGesture(gesture); break;
+      case STATES.ENEMY_ATTACK: this._handleEnemyTap(gesture);          break;
       case STATES.VICTORY:
       case STATES.DEFEAT:
         if (gesture.type === 'tap') this._init();
@@ -158,12 +131,9 @@ class Game {
   _enterState(next) {
     this.state = next;
     switch (next) {
-      case STATES.PLAYER_CHOICE:  this._setupPlayerChoice();  break;
-      case STATES.GESTURE_ATTACK: this._setupGestureAttack(); break;
-      case STATES.GESTURE_MAGIC:  this._setupGestureMagic();  break;
-      case STATES.RESOLVE_PLAYER: this._setupResolvePlayer(); break;
-      case STATES.ENEMY_ATTACK:    this._setupEnemyAttack();    break;
-      case STATES.RESOLVE_ENEMY:   this._setupResolveEnemy();   break;
+      case STATES.PLAYER_TURN:     this._setupPlayerTurn();    break;
+      case STATES.ENEMY_ATTACK:    this._setupEnemyAttack();   break;
+      case STATES.RESOLVE_ENEMY:   this._setupResolveEnemy();  break;
       case STATES.ENCOUNTER_CLEAR: this._setupEncounterClear(); break;
       case STATES.VICTORY:         this.sound.victory();        break;
       case STATES.DEFEAT:          this.sound.defeat();         break;
@@ -171,258 +141,188 @@ class Game {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PLAYER_CHOICE
+  // PLAYER_TURN — depleting timer; swipe to attack, hold→release to fire missile
   // ══════════════════════════════════════════════════════════════════════════
-  _setupPlayerChoice() {
+  _setupPlayerTurn() {
+    this.sound.magicAbort(); // silence any lingering FM hold from a previous turn
     this.player.setDefending(false);
     this.enemy.setWindUp(1.0);
-    this.gesturePhase = { showRadial: false, radialOrigin: null, radialHover: null };
-    // Restore a small amount of MP each turn
-    this.player.restoreMP(7);
-  }
-
-  _drawPlayerChoice() {
-    this._drawBaseBattle();
-    const gp = this.gesturePhase;
-    if (gp.showRadial && gp.radialOrigin) {
-      this.ui.drawRadialMenu(
-        gp.radialOrigin.x,
-        gp.radialOrigin.y,
-        gp.radialHover,
-        this.player.mp >= MAGIC_COST
-      );
-    } else {
-      this.ui.drawStatusMessage('YOUR TURN  —  PRESS TO OPEN MENU', this.ui.C.textLight);
-    }
-  }
-
-  _handleChoiceGesture(gesture) {
-    const gp  = this.gesturePhase;
-    gp.showRadial = false;
-    const action  = gp.radialHover;
-    if (!action) return;
-    this.sound.uiTap();
-    if (action === 'attack') {
-      this._enterState(STATES.GESTURE_ATTACK);
-    } else if (action === 'magic') {
-      if (this.player.mp >= MAGIC_COST) this._enterState(STATES.GESTURE_MAGIC);
-    } else if (action === 'defend') {
-      this.player.setDefending(true);
-      this._enterState(STATES.ENEMY_ATTACK);
-    }
-  }
-
-  _radialSector(angle) {
-    // atan2 returns -PI..+PI; sector boundaries at -5π/6, -π/6, +π/2
-    const PI = Math.PI;
-    if (angle >= -5 * PI / 6 && angle < -PI / 6) return 'attack';  // upward
-    if (angle >= -PI / 6     && angle <  PI / 2) return 'defend';  // down-right
-    return 'magic';                                                   // down-left
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // GESTURE_ATTACK — swipe 3 directional arrows in sequence
-  // ══════════════════════════════════════════════════════════════════════════
-  _setupGestureAttack() {
-    const { arrowCount: total, arrowTimeout } = this.encounterConfig;
-    this.gesturePhase = {
-      sequence:    this._randomDirections(total),
-      total,
-      currentIdx:  0,
-      hits:        0,
-      arrowTimer:   arrowTimeout,
-      arrowTimeout,
-      showResult:  false,
-      resultIsHit: false,
-      resultTimer: 0,
-      done:        false,
-      lastSwipeDir: null,
+    this.playerPhase = {
+      timer:        this.encounterConfig.playerTurnDuration,
+      holdStart:    null,
+      chargeRatio:  0,
+      missiles:     [],
+      missilePops:  [],
+      flashTimer:   0,
       swipeTimer:   0,
+      lastSwipeDir: null,
     };
   }
 
-  _updateGestureAttack() {
-    const gp = this.gesturePhase;
-    if (gp.swipeTimer > 0) gp.swipeTimer--;
-    if (gp.done) return;
+  _updatePlayerTurn() {
+    const pp = this.playerPhase;
 
-    if (gp.showResult) {
-      if (--gp.resultTimer <= 0) {
-        gp.showResult = false;
-        if (++gp.currentIdx >= gp.total) {
-          gp.done = true;
-          this._resolveAttack();
-        } else {
-          gp.arrowTimer = gp.arrowTimeout;
-        }
-      }
+    // Decrement turn timer
+    if (--pp.timer <= 0) {
+      pp.holdStart = null;
+      this.sound.magicAbort();
+      this._enterState(STATES.ENEMY_ATTACK);
       return;
     }
 
-    if (--gp.arrowTimer <= 0) {
-      // Timed out → miss
-      gp.showResult   = true;
-      gp.resultIsHit  = false;
-      gp.resultTimer  = 22;
+    // Update charge ratio while holding
+    if (pp.holdStart !== null) {
+      pp.chargeRatio = Math.min(1.0, (this.p.millis() - pp.holdStart) / MAGIC_DURATION);
+      this.sound.magicChargeUpdate(pp.chargeRatio);
+      if (pp.chargeRatio >= 1.0) {
+        this._fireMissile(1.0);
+      }
+    }
+
+    if (pp.swipeTimer > 0) pp.swipeTimer--;
+    if (pp.flashTimer > 0) pp.flashTimer--;
+
+    // Age missile pop bursts
+    for (let i = pp.missilePops.length - 1; i >= 0; i--) {
+      if (++pp.missilePops[i].age >= pp.missilePops[i].maxAge) pp.missilePops.splice(i, 1);
+    }
+
+    // Move missiles toward enemy; detect hits
+    for (let i = pp.missiles.length - 1; i >= 0; i--) {
+      const m  = pp.missiles[i];
+      const dx = this.ui.enemyCenterX - m.x;
+      const dy = this.ui.enemyCenterY - m.y;
+      const dist = Math.hypot(dx, dy) || 1;
+
+      if (dist <= MISSILE_SPEED) {
+        // Missile reaches enemy this frame
+        const dmg = Math.max(1, Math.round(this.player.atk * m.power));
+        this.enemy.takeDamage(dmg);
+        this.ui.spawnDamageNumber(
+          this.damageNumbers,
+          this.ui.enemyCenterX + (Math.random() - 0.5) * 44,
+          this.ui.enemyCenterY - 72,
+          dmg,
+          [247, 168, 192]
+        );
+        pp.missilePops.push({ x: m.x, y: m.y, age: 0, maxAge: 20 });
+        pp.missiles.splice(i, 1);
+        this.sound.magicCast(m.power);
+        if (!this.enemy.isAlive()) {
+          const hasNext = this.encounterIdx < ENCOUNTERS.length - 1;
+          this._enterState(hasNext ? STATES.ENCOUNTER_CLEAR : STATES.VICTORY);
+          return;
+        }
+      } else {
+        m.x += (dx / dist) * MISSILE_SPEED;
+        m.y += (dy / dist) * MISSILE_SPEED;
+      }
     }
   }
 
-  _drawGestureAttack() {
-    const gp = this.gesturePhase;
+  _drawPlayerTurn() {
+    const pp  = this.playerPhase;
+    const enc = this.encounterConfig;
+
     this.ui.drawEnemyArea(this.enemy);
     this.ui.drawEnemyHealthBar(this.enemy);
 
-    if (!gp.done && !gp.showResult && gp.currentIdx < gp.total) {
-      const timerRatio = gp.arrowTimer / gp.arrowTimeout;
-      this.ui.drawArrowPrompt(
-        gp.sequence[gp.currentIdx],
-        Math.min(255, timerRatio * 310),
-        gp.currentIdx,
-        gp.total,
-        timerRatio
-      );
+    // Charge ring overlay while holding
+    if (pp.holdStart !== null) {
+      this.ui.drawMagicCharge(pp.chargeRatio, 0.6, 0.85);
+    }
+
+    // Player avatar
+    let avatarMode = 'idle', avatarData = 0;
+    if (pp.holdStart !== null) {
+      avatarMode = 'magic';
+      avatarData = pp.chargeRatio;
+    } else if (pp.swipeTimer > 0) {
+      avatarMode = 'attack';
+      avatarData = pp.swipeTimer / 18;
+    }
+    this.ui.drawPlayerAvatar(this.player, this.playerFlashTimer, avatarMode, avatarData, pp.lastSwipeDir);
+    this.ui.drawPlayerName(this.player);
+    this.ui.drawPlayerHealthBar(this.player);
+
+    // Turn timer bar
+    this.ui.drawTimerBar(pp.timer / enc.playerTurnDuration);
+
+    // Missiles, swipe trail
+    this.ui.drawPlayerMissiles(pp.missiles, pp.missilePops);
+    if (pp.holdStart === null) {
       this.ui.drawSwipeTrail(this.swipeTrail);
     }
 
-    if (gp.showResult) {
-      this.ui.drawHitMissFlash(gp.resultIsHit, Math.round((gp.resultTimer / 22) * 220));
+    // Status hint
+    if (pp.holdStart === null) {
+      this.ui.drawStatusMessage('SWIPE TO ATTACK  •  HOLD TO CHARGE', this.ui.C.textLight);
     }
 
-    this.ui.drawPlayerAvatar(this.player, 0, 'attack', gp.swipeTimer / 18, gp.lastSwipeDir);
+    // HIT! flash
+    if (pp.flashTimer > 0) {
+      this.ui.drawHitMissFlash(true, Math.round((pp.flashTimer / 22) * 220));
+    }
+
     this.ui.drawDamageNumbers(this.damageNumbers);
+    if (this.playerFlashTimer > 0) {
+      this.ui.drawFlashOverlay(this.playerFlashTimer * 7);
+    }
   }
 
-  _handleAttackGesture(gesture) {
-    const gp = this.gesturePhase;
-    if (gp.done || gp.showResult || gesture.type !== 'swipe') return;
+  _handlePlayerTurnGesture(gesture) {
+    const pp = this.playerPhase;
 
-    const correct = gesture.direction === gp.sequence[gp.currentIdx];
-    gp.lastSwipeDir = gesture.direction;
-    gp.swipeTimer   = 18;
-    if (correct) {
-      gp.hits++;
-      this.sound.swipeHit();
-      // Immediate per-swipe damage
-      const swipeDmg = Math.round(this.player.atk / gp.total);
-      this.enemy.takeDamage(swipeDmg);
+    if (gesture.type === 'swipe') {
+      // Abort any hold in progress
+      pp.holdStart   = null;
+      pp.chargeRatio = 0;
+      this.sound.magicAbort();
+
+      const dmg = Math.max(1, Math.ceil(this.player.atk * SWIPE_DAMAGE_RATIO));
+      this.enemy.takeDamage(dmg);
       this.ui.spawnDamageNumber(
         this.damageNumbers,
         this.ui.enemyCenterX + (Math.random() - 0.5) * 44,
         this.ui.enemyCenterY - 72,
-        swipeDmg,
+        dmg,
         [126, 207, 238]
       );
-    } else {
-      this.sound.swipeMiss();
-    }
-    gp.showResult  = true;
-    gp.resultIsHit = correct;
-    gp.resultTimer = 22;
-  }
+      pp.lastSwipeDir = gesture.direction;
+      pp.swipeTimer   = 18;
+      pp.flashTimer   = 22;
+      this.sound.swipeHit();
 
-  _resolveAttack() {
-    const gp = this.gesturePhase;
-    // Damage was already applied per-swipe; just play combo sound and transition
-    this.sound.comboComplete(gp.hits, gp.total);
-    this._enterState(STATES.RESOLVE_PLAYER);
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // GESTURE_MAGIC — hold to charge, release in target ring
-  // ══════════════════════════════════════════════════════════════════════════
-  _setupGestureMagic() {
-    this.gesturePhase = {
-      charging:    false,
-      chargeStart: 0,
-      chargeRatio: 0,
-      targetMin:   0.6,
-      targetMax:   0.85,
-      released:    false,
-      resultRatio: 0,
-      _resolved:   false,
-    };
-  }
-
-  _updateGestureMagic() {
-    const gp = this.gesturePhase;
-
-    if (gp.charging && !gp.released) {
-      gp.chargeRatio = Math.min(1.0, (this.p.millis() - gp.chargeStart) / MAGIC_DURATION);
-      this.sound.magicChargeUpdate(gp.chargeRatio);
-      if (gp.chargeRatio >= 1.0) {
-        // Auto-release at max charge
-        gp.released    = true;
-        gp.resultRatio = 1.0;
-      }
-    }
-
-    if (gp.released && !gp._resolved) {
-      gp._resolved = true;
-      this._resolveMagic();
-    }
-  }
-
-  _drawGestureMagic() {
-    const gp = this.gesturePhase;
-    this.ui.drawEnemyArea(this.enemy);
-    this.ui.drawEnemyHealthBar(this.enemy);
-    this.ui.drawMagicCharge(gp.chargeRatio, gp.targetMin, gp.targetMax);
-    this.ui.drawPlayerAvatar(this.player, 0, 'magic', gp.chargeRatio);
-  }
-
-  /** Any touchEnd while charging triggers the release. */
-  _handleMagicGesture(gesture) {
-    const gp = this.gesturePhase;
-    if (gp.released || !gp.charging) return;
-    gp.released    = true;
-    gp.resultRatio = gp.chargeRatio;
-  }
-
-  _resolveMagic() {
-    const gp = this.gesturePhase;
-    const r  = gp.resultRatio;
-    const inTarget = r >= gp.targetMin && r <= gp.targetMax;
-    let power;
-    if (inTarget) {
-      power = 1.0;
-    } else {
-      const dist = Math.min(
-        Math.abs(r - gp.targetMin),
-        Math.abs(r - gp.targetMax)
-      );
-      power = Math.max(0.25, 1.0 - dist / 0.45);
-    }
-
-    const dmg = Math.round(this.player.mag * power);
-    this.player.useMP(MAGIC_COST);
-    this.enemy.takeDamage(dmg);
-    this.ui.spawnDamageNumber(
-      this.damageNumbers,
-      this.ui.enemyCenterX + (Math.random() - 0.5) * 44,
-      this.ui.enemyCenterY - 72,
-      dmg,
-      [247, 168, 192]
-    );
-    this.sound.magicCast(power);
-    this._enterState(STATES.RESOLVE_PLAYER);
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RESOLVE_PLAYER — brief pause after player acts
-  // ══════════════════════════════════════════════════════════════════════════
-  _setupResolvePlayer() {
-    this.resolvePhase = { timer: 80 };
-  }
-
-  _updateResolvePlayer() {
-    if (--this.resolvePhase.timer <= 0) {
       if (!this.enemy.isAlive()) {
         const hasNext = this.encounterIdx < ENCOUNTERS.length - 1;
         this._enterState(hasNext ? STATES.ENCOUNTER_CLEAR : STATES.VICTORY);
-      } else {
-        this._enterState(STATES.ENEMY_ATTACK);
       }
+
+    } else if (gesture.type === 'hold') {
+      const ratio = pp.chargeRatio;
+      pp.holdStart   = null;
+      pp.chargeRatio = 0;
+      if (ratio >= MISSILE_MIN_CHARGE) {
+        this._fireMissile(ratio);
+      } else {
+        this.sound.magicAbort();
+      }
+
+    } else {
+      // tap or none — just cancel any hold
+      pp.holdStart   = null;
+      pp.chargeRatio = 0;
+      this.sound.magicAbort();
     }
+  }
+
+  _fireMissile(power) {
+    this.sound.magicAbort(); // stop the charge hum; sting plays on impact
+    this.playerPhase.missiles.push({
+      x:     this.ui.w / 2,
+      y:     this.ui.heroCenterY - 30,
+      power: Math.min(1.0, power),
+    });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -571,7 +471,6 @@ class Game {
     this.ui.drawPlayerAvatar(this.player, this.playerFlashTimer);
     this.ui.drawPlayerName(this.player);
     this.ui.drawPlayerHealthBar(this.player);
-    this.ui.drawPlayerMPBar(this.player);
 
     if (ep.windUpDone) {
       this.ui.drawBubbles(ep.targets, ep.pops);
@@ -619,7 +518,7 @@ class Game {
         const hasNext = this.encounterIdx < ENCOUNTERS.length - 1;
         this._enterState(hasNext ? STATES.ENCOUNTER_CLEAR : STATES.VICTORY);
       } else {
-        this._enterState(STATES.PLAYER_CHOICE);
+        this._enterState(STATES.PLAYER_TURN);
       }
     }
   }
@@ -640,8 +539,7 @@ class Game {
       this.enemy = this.encounterConfig.createEnemy();
       // Partial heal between rounds
       this.player.heal(25);
-      this.player.restoreMP(20);
-      this._enterState(STATES.PLAYER_CHOICE);
+      this._enterState(STATES.PLAYER_TURN);
     }
   }
 
@@ -662,19 +560,12 @@ class Game {
     this.ui.drawPlayerAvatar(this.player, this.playerFlashTimer);
     this.ui.drawPlayerName(this.player);
     this.ui.drawPlayerHealthBar(this.player);
-    this.ui.drawPlayerMPBar(this.player);
     this.ui.drawDamageNumbers(this.damageNumbers);
     if (this.playerFlashTimer > 0) {
       this.ui.drawFlashOverlay(this.playerFlashTimer * 7);
     }
   }
 
-  // ── Utilities ─────────────────────────────────────────────────────────────
-  _randomDirections(count) {
-    return Array.from({ length: count }, () =>
-      ALL_DIRECTIONS[Math.floor(Math.random() * ALL_DIRECTIONS.length)]
-    );
-  }
 
 }
 

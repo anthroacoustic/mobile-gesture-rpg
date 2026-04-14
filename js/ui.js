@@ -134,172 +134,6 @@ class UI {
     p.textStyle(p.NORMAL);
   }
 
-  // ── Radial action menu ───────────────────────────────────────────────────
-  /**
-   * Three 120° sectors centred on the touch origin.
-   * Sectors: attack (up), defend (down-right), magic (down-left).
-   * @param {number}      ox            touch origin x
-   * @param {number}      oy            touch origin y
-   * @param {string|null} hoveredSector 'attack'|'defend'|'magic'|null
-   * @param {boolean}     mpOk          whether magic is available
-   */
-  drawRadialMenu(ox, oy, hoveredSector, mpOk) {
-    const p          = this.p;
-    const innerR     = 52;
-    const outerR     = 145;
-    const GAP        = 0.07; // radians gap between sectors
-
-    const sectors = [
-      {
-        id:     'attack',
-        start:  -5 * Math.PI / 6 + GAP,
-        stop:   -Math.PI / 6     - GAP,
-        mid:    -Math.PI / 2,
-        icon:   '\u2694',
-        label:  'Attack',
-        color:  this.C.blue,
-      },
-      {
-        id:     'defend',
-        start:  -Math.PI / 6     + GAP,
-        stop:    Math.PI / 2     - GAP,
-        mid:     Math.PI / 6,
-        icon:   '\uD83D\uDEE1',
-        label:  'Defend',
-        color:  this.C.blue,
-      },
-      {
-        id:     'magic',
-        start:   Math.PI / 2     + GAP,
-        stop:    7 * Math.PI / 6 - GAP,
-        mid:     5 * Math.PI / 6,
-        icon:   '\u2726',
-        label:  'Magic',
-        color:  this.C.pink,
-      },
-    ];
-
-    // Draw filled sector wedges
-    p.noStroke();
-    for (const s of sectors) {
-      const hovered  = hoveredSector === s.id;
-      const disabled = s.id === 'magic' && !mpOk;
-      if (disabled) {
-        p.fill(50, 50, 70, 130);
-      } else if (hovered) {
-        p.fill(...s.color, 220);
-      } else {
-        p.fill(40, 20, 60, 200);
-      }
-      p.arc(ox, oy, outerR * 2, outerR * 2, s.start, s.stop, p.PIE);
-    }
-
-    // Sector borders
-    for (const s of sectors) {
-      const hovered  = hoveredSector === s.id;
-      const disabled = s.id === 'magic' && !mpOk;
-      if (!disabled) {
-        p.noFill();
-        p.stroke(...s.color, hovered ? 255 : 130);
-        p.strokeWeight(1.5);
-        p.arc(ox, oy, outerR * 2, outerR * 2, s.start, s.stop, p.PIE);
-      }
-    }
-
-    // Donut cutout — background circle erases wedge centres
-    p.noStroke();
-    p.fill(...this.C.bg);
-    p.ellipse(ox, oy, innerR * 2, innerR * 2);
-
-    // Centre hint
-    p.fill(...this.C.textLight, 90);
-    p.textAlign(p.CENTER, p.CENTER);
-    p.textSize(10);
-    p.text('drag', ox, oy);
-
-    // Icons + labels at mid-radius of each sector
-    const midR = (innerR + outerR) / 2;
-    for (const s of sectors) {
-      const hovered  = hoveredSector === s.id;
-      const disabled = s.id === 'magic' && !mpOk;
-      const ix = ox + Math.cos(s.mid) * midR;
-      const iy = oy + Math.sin(s.mid) * midR;
-
-      p.fill(...(disabled ? [80, 80, 100] : (hovered ? this.C.bg : s.color)),
-             disabled ? 100 : 230);
-      p.textAlign(p.CENTER, p.CENTER);
-      p.textSize(22);
-      p.text(s.icon, ix, iy - 9);
-      p.textSize(11);
-      p.text(s.label, ix, iy + 13);
-    }
-
-    p.noStroke();
-  }
-
-  // ── Swipe attack gesture ──────────────────────────────────────────────────
-  /**
-   * @param {string}  direction   'up' | 'down' | 'left' | 'right'
-   * @param {number}  opacity     0-255
-   * @param {number}  doneCount   arrows already completed
-   * @param {number}  total       total arrows in sequence
-   * @param {number}  timerRatio  remaining time 0..1 (for urgency tint)
-   */
-  drawArrowPrompt(direction, opacity, doneCount, total, timerRatio) {
-    const p  = this.p;
-    const cx = this.w / 2;
-    const cy = this.h * 0.43;
-
-    const rot = { up: -p.HALF_PI, down: p.HALF_PI, left: p.PI, right: 0 }[direction] ?? 0;
-
-    // Glow halo
-    p.push();
-    p.translate(cx, cy);
-    p.rotate(rot);
-    this._arrowShape(p, 0, 0, 95, [...this.C.blue, opacity * 0.22]);
-    this._arrowShape(p, 0, 0, 72, [...this.C.blue, opacity]);
-    p.pop();
-
-    // Direction label — in the shared message zone
-    p.fill(...this.C.blueLight, Math.round(opacity * 0.85));
-    p.noStroke();
-    p.textAlign(p.CENTER, p.CENTER);
-    p.textSize(13);
-    p.text('SWIPE  ' + direction.toUpperCase(), cx, this.messageY);
-
-    // Progress dots just below the label
-    const dotGap    = 22;
-    const dotsStart = cx - ((total - 1) * dotGap) / 2;
-    for (let i = 0; i < total; i++) {
-      if (i < doneCount) {
-        p.fill(...this.C.blue, 210);
-      } else if (i === doneCount) {
-        p.fill(...this.C.blueLight, 255);
-      } else {
-        p.fill(70, 80, 100, 160);
-      }
-      p.ellipse(dotsStart + i * dotGap, this.messageY + 22, 9, 9);
-    }
-  }
-
-  _arrowShape(p, x, y, size, col) {
-    // Arrow pointing right; caller rotates to desired direction
-    p.fill(...col);
-    p.noStroke();
-    const hw = size * 0.56;
-    const hh = size * 0.27;
-    const nk = size * 0.12; // notch offset
-    p.beginShape();
-    p.vertex(x + hw,        y);
-    p.vertex(x,             y - hh);
-    p.vertex(x + nk,        y - hh * 0.52);
-    p.vertex(x - hw * 0.52, y - hh * 0.52);
-    p.vertex(x - hw * 0.52, y + hh * 0.52);
-    p.vertex(x + nk,        y + hh * 0.52);
-    p.vertex(x,             y + hh);
-    p.endShape(p.CLOSE);
-  }
-
   drawSwipeTrail(points) {
     const p = this.p;
     if (points.length < 2) return;
@@ -310,6 +144,91 @@ class UI {
       p.strokeWeight(t * 5);
       p.line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
     }
+    p.noStroke();
+  }
+
+  // ── Player turn timer bar ────────────────────────────────────────────────
+  /** @param {number} ratio  remaining time 0..1 */
+  drawTimerBar(ratio) {
+    const p    = this.p;
+    const barW = this.w * 0.72;
+    const barH = 10;
+    const bx   = (this.w - barW) / 2;
+    const by   = this.hpBarY - 30;
+
+    // Track
+    p.noStroke();
+    p.fill(50, 20, 20, 200);
+    this._roundRect(bx, by, barW, barH, 4);
+
+    // Fill — gradient orange → red as time runs low
+    if (ratio > 0) {
+      const urgency = Math.max(0, 1 - ratio * 2.5);
+      const r = Math.round(220 + urgency * 35);
+      const g = Math.round(140 - urgency * 110);
+      p.fill(r, g, 40, 220);
+      this._roundRect(bx, by, barW * ratio, barH, 4);
+    }
+
+    // Pulsing border when low on time
+    if (ratio < 0.25) {
+      const pulse = (Math.sin(this.p.frameCount * 0.2) + 1) / 2;
+      p.noFill();
+      p.stroke(255, 80, 80, Math.round(pulse * 200));
+      p.strokeWeight(1.5);
+      this._roundRect(bx, by, barW, barH, 4);
+      p.noStroke();
+    }
+
+    p.noStroke();
+    p.fill(...this.C.textLight, 160);
+    p.textAlign(p.LEFT, p.CENTER);
+    p.textSize(11);
+    p.text('YOUR TURN', bx, by - 9);
+  }
+
+  // ── Player missiles (pink orbs flying toward enemy) ──────────────────────
+  drawPlayerMissiles(missiles, pops) {
+    const p = this.p;
+
+    for (const m of missiles) {
+      const r = 10 + Math.round(m.power * 6);
+      // Outer glow
+      p.noStroke();
+      p.fill(...this.C.pink, 30);
+      p.ellipse(m.x, m.y, r * 3.2, r * 3.2);
+      // Main orb
+      p.fill(...this.C.pink, Math.round(180 + m.power * 60));
+      p.ellipse(m.x, m.y, r * 2, r * 2);
+      // Bright centre dot
+      p.fill(...this.C.white, 220);
+      p.ellipse(m.x, m.y, 7, 7);
+    }
+
+    // Pop burst animations (pink)
+    for (const pop of pops) {
+      const ratio = pop.age / pop.maxAge;
+      const alpha = Math.round(255 * (1 - ratio));
+
+      p.noFill();
+      p.stroke(...this.C.pink, Math.round(alpha * 0.85));
+      p.strokeWeight(2);
+      p.ellipse(pop.x, pop.y, (16 + ratio * 50) * 2, (16 + ratio * 50) * 2);
+
+      p.stroke(...this.C.pinkDark, Math.round(alpha * 0.45));
+      p.strokeWeight(1);
+      p.ellipse(pop.x, pop.y, (16 + ratio * 80) * 2, (16 + ratio * 80) * 2);
+
+      p.noStroke();
+      const dotSize = Math.max(0, 5 * (1 - ratio));
+      p.fill(...this.C.pink, alpha);
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        const r = 16 + ratio * 45;
+        p.ellipse(pop.x + Math.cos(a) * r, pop.y + Math.sin(a) * r, dotSize, dotSize);
+      }
+    }
+
     p.noStroke();
   }
 
@@ -727,7 +646,7 @@ class UI {
     // HP restored note
     p.fill(...this.C.pink, 200);
     p.textSize(15);
-    p.text('+25 HP  +20 MP restored', this.w / 2, this.h / 2 + 4);
+    p.text('+25 HP restored', this.w / 2, this.h / 2 + 4);
 
     // Next enemy preview
     if (nextName) {
