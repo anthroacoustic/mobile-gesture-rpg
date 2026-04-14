@@ -496,8 +496,25 @@ class Game {
       t.speed += t.accel;
 
       if (Math.hypot(t.x - this.ui.enemyCenterX, t.y - this.ui.heroCenterY) < heroR) {
+        ep.pops.push({ x: t.x, y: t.y, age: 0, maxAge: 20 });
         ep.targets.splice(i, 1);
         ep.unblockedHits++;
+
+        // Immediate per-bubble damage (total enemy.atk split across all strikes)
+        const dmg    = Math.round(this.enemy.atk / ep.totalStrikes);
+        const actual = this.player.takeDamage(dmg);
+        if (actual > 0) {
+          this.playerFlashTimer = 22;
+          this.sound.playerHit();
+          this.ui.spawnDamageNumber(
+            this.damageNumbers,
+            this.ui.w / 2 + (Math.random() - 0.5) * 60,
+            this.ui.hpBarY - 22,
+            actual,
+            [244, 104, 138]
+          );
+        }
+
         this._advanceStrike();
       }
     }
@@ -590,23 +607,7 @@ class Game {
   // RESOLVE_ENEMY — apply unblocked hit damage, then transition
   // ══════════════════════════════════════════════════════════════════════════
   _setupResolveEnemy() {
-    const ep   = this.enemyPhase;
-    const hits = ep.unblockedHits || 0;
-
-    if (hits > 0) {
-      const actual = this.player.takeDamage(this.enemy.atk * hits);
-      if (actual > 0) {
-        this.playerFlashTimer = 22;
-        this.sound.playerHit();
-        this.ui.spawnDamageNumber(
-          this.damageNumbers,
-          this.ui.w / 2 + (Math.random() - 0.5) * 60,
-          this.ui.hpBarY - 22,
-          actual,
-          [244, 104, 138]
-        );
-      }
-    }
+    // Damage is applied immediately per bubble in _updateEnemyAttack.
     this.resolvePhase = { timer: 80 };
   }
 
