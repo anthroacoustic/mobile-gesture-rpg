@@ -11,6 +11,7 @@ const MAGIC_DURATION     = 2200;  // ms for full charge
 const SWIPE_DAMAGE       = 2;     // flat damage per swipe
 const MISSILE_MIN_CHARGE = 0.2;   // minimum charge fraction to fire a missile
 const MISSILE_SPEED      = 10;    // px/frame — straight toward enemy
+const MISSILE_MAX_DAMAGE = 12;    // damage at full charge; scales down with power
 
 /**
  * Encounter configs drive enemy creation and per-round timing.
@@ -196,7 +197,7 @@ class Game {
 
       if (dist <= MISSILE_SPEED) {
         // Missile reaches enemy this frame
-        const dmg = Math.max(1, Math.round(this.player.atk * m.power));
+        const dmg = Math.max(1, Math.round(MISSILE_MAX_DAMAGE * m.power));
         this.enemy.takeDamage(dmg);
         this.ui.spawnDamageNumber(
           this.damageNumbers,
