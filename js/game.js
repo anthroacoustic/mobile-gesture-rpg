@@ -446,7 +446,16 @@ class Game {
 
   _updateEnemyAttack() {
     const ep = this.enemyPhase;
-    if (ep.allDone) return;
+
+    // Age pop bursts — runs even when allDone so the last pop finishes animating
+    for (let i = ep.pops.length - 1; i >= 0; i--) {
+      if (++ep.pops[i].age >= ep.pops[i].maxAge) ep.pops.splice(i, 1);
+    }
+
+    if (ep.allDone) {
+      if (ep.pops.length === 0) this._enterState(STATES.RESOLVE_ENEMY);
+      return;
+    }
 
     // Wind-up phase
     if (!ep.windUpDone) {
@@ -492,11 +501,6 @@ class Game {
       }
     }
 
-    // Age pop bursts
-    for (let i = ep.pops.length - 1; i >= 0; i--) {
-      if (++ep.pops[i].age >= ep.pops[i].maxAge) ep.pops.splice(i, 1);
-    }
-
     // Inter-strike delay
     if (ep.strikeDelayTimer > 0) {
       ep.strikeDelayTimer--;
@@ -528,7 +532,8 @@ class Game {
     ep.currentStrike++;
     if (ep.currentStrike >= ep.totalStrikes) {
       ep.allDone = true;
-      this._enterState(STATES.RESOLVE_ENEMY);
+      // Transition to RESOLVE_ENEMY is deferred to _updateEnemyAttack
+      // so any pending pop animation has time to render.
     } else {
       ep.strikeDelayTimer = ep.strikeDelay;
     }
