@@ -8,7 +8,7 @@ const STATES = {
 };
 
 const MAGIC_DURATION     = 2200;  // ms for full charge
-const SWIPE_DAMAGE_RATIO = 0.35;  // player.atk × ratio per swipe
+const SWIPE_DAMAGE       = 2;     // flat damage per swipe
 const MISSILE_MIN_CHARGE = 0.2;   // minimum charge fraction to fire a missile
 const MISSILE_SPEED      = 10;    // px/frame — straight toward enemy
 
@@ -279,7 +279,7 @@ class Game {
       pp.chargeRatio = 0;
       this.sound.magicAbort();
 
-      const dmg = Math.max(1, Math.ceil(this.player.atk * SWIPE_DAMAGE_RATIO));
+      const dmg = SWIPE_DAMAGE;
       this.enemy.takeDamage(dmg);
       this.ui.spawnDamageNumber(
         this.damageNumbers,
