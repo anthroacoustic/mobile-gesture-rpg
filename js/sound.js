@@ -26,9 +26,9 @@ class SoundEngine {
    */
   async unlock() {
     if (this._unlocked) return;
+    this._buildSynths();
     await Tone.start();
     this._unlocked = true;
-    this._buildSynths();
   }
 
   _buildSynths() {
