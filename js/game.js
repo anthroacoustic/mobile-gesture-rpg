@@ -141,6 +141,7 @@ class Game {
   }
 
   onGesture(gesture) {
+    this.sound.unlock(); // retry on touchend — more reliable on strict browsers
     switch (this.state) {
       case STATES.PLAYER_CHOICE:  this._handleChoiceGesture(gesture);  break;
       case STATES.GESTURE_ATTACK: this._handleAttackGesture(gesture);  break;
