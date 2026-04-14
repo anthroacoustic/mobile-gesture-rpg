@@ -13,7 +13,6 @@
 class SoundEngine {
   constructor() {
     this._unlocked      = false;
-    this._unlocking     = false; // re-entrancy guard
     this._magicCharging = false;
     this.fm             = null;
     this.metal          = null;
@@ -21,22 +20,17 @@ class SoundEngine {
   }
 
   /**
-   * Resume the AudioContext. Call from any user-gesture handler (touchstart
-   * or touchend). The _unlocking flag prevents concurrent calls from
-   * creating duplicate audio graphs. If Tone.start() rejects (e.g. on a
-   * strict browser on the first try), the flag resets so the next gesture
-   * can retry.
+   * Resume the AudioContext. Call from any user-gesture handler.
+   * Called on both touchstart and touchend so strict browsers (iOS Safari)
+   * have two opportunities to accept the resume.
+   * Fire-and-forget async — sounds in the same synchronous handler will be
+   * silent on the very first unlock; all later ones play normally.
    */
   async unlock() {
-    if (this._unlocked || this._unlocking) return;
-    this._unlocking = true;
-    try {
-      await Tone.start();
-      this._buildSynths();
-      this._unlocked = true;
-    } finally {
-      this._unlocking = false;
-    }
+    if (this._unlocked) return;
+    await Tone.start();
+    this._unlocked = true;
+    this._buildSynths();
   }
 
   _buildSynths() {
